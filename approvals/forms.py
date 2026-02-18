@@ -1,31 +1,30 @@
 from django import forms
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
 from .models import Document
+
+User = get_user_model()
+
+def user_label(u):
+    # Profile이 있으면 이름+위원장 표기
+    if hasattr(u, "profile") and hasattr(u.profile, "display_name"):
+        return u.profile.display_name()
+    # fallback
+    return getattr(getattr(u, "profile", None), "full_name", "") or u.username
 
 
 class MultipleFileInput(forms.ClearableFileInput):
-    allow_multiple_selected = True  # ✅ Django가 multiple 허용하도록
+    allow_multiple_selected = True
 
 
 class MultipleFileField(forms.FileField):
     widget = MultipleFileInput
 
     def clean(self, data, initial=None):
-        # 업로드 없으면 빈 리스트
         if not data:
             return []
-
-        # ✅ super()를 먼저 고정 (listcomp 안에서 super() 꼬임 방지)
         parent_clean = super(MultipleFileField, self).clean
-
-        # 여러 파일이면 각각 clean
         if isinstance(data, (list, tuple)):
-            cleaned = []
-            for d in data:
-                cleaned.append(parent_clean(d, initial))
-            return cleaned
-
-        # 단일 파일이어도 리스트로 반환
+            return [parent_clean(d, initial) for d in data]
         return [parent_clean(data, initial)]
 
 
@@ -50,7 +49,6 @@ class DocumentForm(forms.ModelForm):
         label="수신/열람자(여러 명 가능)",
     )
 
-    # ✅ 멀티 파일 업로드 필드 (Django 5 대응)
     files = MultipleFileField(
         required=False,
         label="첨부파일(여러 개 가능)",
@@ -60,3 +58,10 @@ class DocumentForm(forms.ModelForm):
         model = Document
         fields = ("title", "content")
         widgets = {"content": forms.Textarea(attrs={"rows": 8})}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # ✅ 드롭다운 표시를 "이름 (위원장)"으로 변경
+        for fname in ["consultants", "approvers", "receivers"]:
+            self.fields[fname].label_from_instance = user_label

@@ -1,13 +1,53 @@
 {% extends "base.html" %}
-{% block content %}
-<h1>문서 상신</h1>
+{% load static %}
 
-<form method="post" enctype="multipart/form-data" class="card">
-  {% csrf_token %}
-  {{ form.as_p }}
-  <div class="actions">
-    <button class="primary" type="submit">상신</button>
-    <a class="btn" href="{% url 'approvals:home' %}">취소</a>
-  </div>
-</form>
+{% block content %}
+<div class="container">
+  <h2>문서 작성</h2>
+
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+
+    <div>
+      {{ form.title.label_tag }}
+      {{ form.title }}
+      {{ form.title.errors }}
+    </div>
+
+    <div>
+      {{ form.content.label_tag }}
+      {{ form.content }}
+      {{ form.content.errors }}
+    </div>
+
+    <div>
+      {{ form.consultants.label_tag }}
+      {{ form.consultants }}
+      {{ form.consultants.errors }}
+    </div>
+
+    <div>
+      {{ form.approvers.label_tag }}
+      {{ form.approvers }}
+      {% if form.approvers.help_text %}
+        <small class="muted">{{ form.approvers.help_text }}</small>
+      {% endif %}
+      {{ form.approvers.errors }}
+    </div>
+
+    <div>
+      {{ form.receivers.label_tag }}
+      {{ form.receivers }}
+      {{ form.receivers.errors }}
+    </div>
+
+    <div>
+      {{ form.files.label_tag }}
+      {{ form.files }}
+      {{ form.files.errors }}
+    </div>
+
+    <button type="submit">상신</button>
+  </form>
+</div>
 {% endblock %}

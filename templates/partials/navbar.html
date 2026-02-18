@@ -4,7 +4,7 @@
   </div>
   <div class="nav-right">
     {% if user.is_authenticated %}
-      <span class="muted">안녕하세요, {{ user.username }}</span>
+      <span class="muted">안녕하세요, {{ user.profile.display_name|default:user.username }}</span>
       <a href="{% url 'approvals:doc_create' %}">상신</a>
       <a href="{% url 'approvals:doc_list' %}">문서함</a>
       <a href="{% url 'approvals:inbox' %}">결재함</a>

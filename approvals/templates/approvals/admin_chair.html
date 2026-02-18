@@ -28,7 +28,7 @@
     <tbody>
       {% for u in users %}
       <tr>
-        <td>{{ u.username }}</td>
+        <td>{{ u.profile.display_name|default:u.username }}</td>
         <td>
           <form method="post">
             {% csrf_token %}

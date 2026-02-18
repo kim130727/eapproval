@@ -19,7 +19,7 @@
         <td>{{ d.id }}</td>
         <td><a href="{% url 'approvals:doc_detail' d.id %}">{{ d.title }}</a></td>
         <td>{{ d.get_status_display }}</td>
-        <td>{{ d.created_by.username }}</td>
+        <td>{{ d.created_by.profile.full_name|default:d.created_by.username }}</td>
         <td>{{ d.updated_at|date:"Y-m-d H:i" }}</td>
       </tr>
       {% empty %}

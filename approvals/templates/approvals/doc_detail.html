@@ -5,7 +5,7 @@
 <div class="card">
   <p><span class="badge">{{ doc.get_status_display }}</span> 문서ID: {{ doc.id }}</p>
   <h2>{{ doc.title }}</h2>
-  <p class="muted">작성자: {{ doc.created_by.username }} / 작성: {{ doc.created_at|date:"Y-m-d H:i" }}</p>
+  <p class="muted">작성자: {{ doc.created_by.profile.full_name|default:doc.created_by.username }} / 작성: {{ doc.created_at|date:"Y-m-d H:i" }}</p>
   <hr/>
   <div style="white-space: pre-wrap;">{{ doc.content }}</div>
 </div>
@@ -18,7 +18,7 @@
   <a href="{% url 'approvals:attachment_download' a.id %}">
     {{ a.file.name }}
   </a>
-  (업로드: {{ a.uploaded_by.username }})
+  (업로드: {{ a.uploaded_by.profile.display_name|default:a.uploaded_by.username }})
 </li>
     {% empty %}
       <li>첨부 없음</li>
@@ -39,7 +39,7 @@
       <tr>
         <td>{{ line.get_role_display }}</td>
         <td>{{ line.order }}</td>
-        <td>{{ line.user.username }}</td>
+        <td>{{ line.user.profile.display_name|default:line.user.username }}</td>
         <td>{{ line.get_decision_display }}</td>
         <td>{{ line.comment }}</td>
         <td>{% if line.acted_at %}{{ line.acted_at|date:"Y-m-d H:i" }}{% endif %}</td>
@@ -54,7 +54,7 @@
   <h3>현재 처리 단계</h3>
   <p>
     현재 단계: <b>{{ current_line.get_role_display }}</b>
-    / 담당: <b>{{ current_line.user.username }}</b>
+    / 담당: <b>{{ current_line.user.profile.display_name|default:current_line.user.username }}</b>
   </p>
 
   {% if can_act and doc.status == "IN_PROGRESS" %}
