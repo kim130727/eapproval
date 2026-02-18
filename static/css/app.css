@@ -1,0 +1,17 @@
+body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; margin: 0; background: #fafafa; }
+.container { max-width: 980px; margin: 20px auto; padding: 0 16px; }
+.nav { display:flex; justify-content:space-between; align-items:center; padding: 12px 16px; background:#fff; border-bottom:1px solid #eee; }
+.nav a { margin-left: 10px; text-decoration:none; color:#222; }
+.nav .muted { color:#777; margin-right: 8px; }
+.messages { list-style:none; padding:0; }
+.msg { padding:10px 12px; margin: 8px 0; border-radius: 8px; background:#fff; border:1px solid #eee; }
+.msg.success { border-color:#cce7cc; background:#f1fbf1; }
+.msg.error { border-color:#f3c1c1; background:#fff0f0; }
+.card { background:#fff; border:1px solid #eee; border-radius: 12px; padding: 14px; margin: 12px 0; }
+.badge { display:inline-block; padding: 3px 8px; border-radius: 999px; background:#f0f0f0; font-size: 12px; }
+.table { width:100%; border-collapse: collapse; }
+.table th, .table td { border-bottom:1px solid #eee; padding: 8px; text-align:left; }
+.actions button, .actions a.btn { display:inline-block; padding: 8px 10px; border-radius: 10px; border:1px solid #ddd; background:#fff; cursor:pointer; text-decoration:none; color:#222; }
+.actions button.primary { border-color:#222; }
+input, select, textarea { width:100%; padding: 8px; border:1px solid #ddd; border-radius: 10px; box-sizing: border-box; }
+label { font-weight: 600; }

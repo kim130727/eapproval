@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>위원장 관리 ({{ chair_group.name }})</h1>
+
+<div class="card">
+  <h3>현재 위원장</h3>
+  <ul>
+    {% for u in chairs %}
+      <li>
+        {{ u.username }}
+        <form method="post" style="display:inline;">
+          {% csrf_token %}
+          <input type="hidden" name="user_id" value="{{ u.id }}">
+          <input type="hidden" name="action" value="remove">
+          <button type="submit">해제</button>
+        </form>
+      </li>
+    {% empty %}
+      <li>위원장이 없습니다.</li>
+    {% endfor %}
+  </ul>
+</div>
+
+<div class="card">
+  <h3>사용자 목록</h3>
+  <table class="table">
+    <thead><tr><th>유저</th><th>조치</th></tr></thead>
+    <tbody>
+      {% for u in users %}
+      <tr>
+        <td>{{ u.username }}</td>
+        <td>
+          <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="user_id" value="{{ u.id }}">
+            <input type="hidden" name="action" value="add">
+            <button type="submit">위원장 임명</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% endblock %}

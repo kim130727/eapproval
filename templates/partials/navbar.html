@@ -1,0 +1,23 @@
+<nav class="nav">
+  <div class="nav-left">
+    <a href="{% url 'approvals:home' %}">전자결재</a>
+  </div>
+  <div class="nav-right">
+    {% if user.is_authenticated %}
+      <span class="muted">안녕하세요, {{ user.username }}</span>
+      <a href="{% url 'approvals:doc_create' %}">상신</a>
+      <a href="{% url 'approvals:doc_list' %}">문서함</a>
+      <a href="{% url 'approvals:inbox' %}">결재함</a>
+      <a href="{% url 'approvals:admin_chair' %}">위원장관리</a>
+      <form method="post" action="{% url 'accounts:logout' %}" style="display:inline;">
+        {% csrf_token %}
+        <button type="submit" style="border:none; background:none; cursor:pointer; padding:0; margin-left:10px;">
+            로그아웃
+        </button>
+</form>
+    {% else %}
+      <a href="{% url 'accounts:login' %}">로그인</a>
+      <a href="{% url 'accounts:signup' %}">회원가입</a>
+    {% endif %}
+  </div>
+</nav>
