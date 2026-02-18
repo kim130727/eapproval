@@ -39,7 +39,7 @@
       <tr>
         <td>{{ line.get_role_display }}</td>
         <td>{{ line.order }}</td>
-        <td>{{ line.user.profile.display_name|default:line.user.username }}</td>
+        <td>{{ line.user.profile.full_name|default:line.user.username }}</td>
         <td>{{ line.get_decision_display }}</td>
         <td>{{ line.comment }}</td>
         <td>{% if line.acted_at %}{{ line.acted_at|date:"Y-m-d H:i" }}{% endif %}</td>

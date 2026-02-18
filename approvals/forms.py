@@ -4,6 +4,17 @@ from .models import Document
 
 User = get_user_model()
 
+def __init__(self, *args, **kwargs):
+    super().__init__(*args, **kwargs)
+
+    for fname in ["consultants", "approvers", "receivers"]:
+        def user_label(u):
+            if hasattr(u, "profile"):
+                return u.profile.full_name or u.username
+            return u.username
+        self.fields[fname].label_from_instance = user_label 
+        self.fields[fname].widget.attrs.update({"id": f"id_{fname}"}) 
+
 def user_label(u):
     # Profile이 있으면 이름+위원장 표기
     if hasattr(u, "profile") and hasattr(u.profile, "display_name"):

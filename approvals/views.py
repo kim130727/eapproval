@@ -1,26 +1,25 @@
 from django.contrib import messages
+from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth.models import Group, User
-from django.http import Http404
+from django.contrib.auth.models import Group
+from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
-
-from .forms import DocumentForm
-from .models import Document
-from .permissions import can_view_document, is_chair, CHAIR_GROUP
-from .selectors import my_documents, inbox_pending, received_docs
-from .services import (
-    create_document_with_lines_and_files,
-    approve_or_consult,
-    reject,
-    mark_read,
-)
-
-import os
-from django.http import FileResponse
 from django.utils.encoding import smart_str
 
-from .models import Attachment
-from .permissions import can_view_document
+import os
+
+from .forms import DocumentForm
+from .models import Attachment, Document
+from .permissions import CHAIR_GROUP, can_view_document, is_chair
+from .selectors import inbox_pending, my_documents, received_docs
+from .services import (
+    approve_or_consult,
+    create_document_with_lines_and_files,
+    mark_read,
+    reject,
+)
+
+User = get_user_model()
 
 
 @login_required
@@ -63,7 +62,10 @@ def doc_detail(request, doc_id: int):
 
     # 현재 처리해야 하는 라인이 "내 것인지" 템플릿에서 버튼 표시용
     current_line = doc.lines.filter(order=doc.current_line_order, decision="PENDING").first()
-    can_act = current_line and (current_line.user_id == request.user.id or request.user.is_superuser)
+
+    # ✅ 슈퍼유저도 처리 가능하게 할지 여부는 정책입니다.
+    #    지금은 기존 코드 유지(슈퍼유저는 can_act True)
+    can_act = bool(current_line) and (current_line.user_id == request.user.id or request.user.is_superuser)
 
     return render(
         request,
@@ -98,6 +100,7 @@ def act_approve(request, doc_id: int):
     doc = get_object_or_404(Document, id=doc_id)
     if request.method != "POST":
         return redirect("approvals:doc_detail", doc_id=doc.id)
+
     comment = request.POST.get("comment", "")
     try:
         approve_or_consult(doc=doc, actor=request.user, comment=comment)
@@ -112,6 +115,7 @@ def act_reject(request, doc_id: int):
     doc = get_object_or_404(Document, id=doc_id)
     if request.method != "POST":
         return redirect("approvals:doc_detail", doc_id=doc.id)
+
     comment = request.POST.get("comment", "")
     if not comment.strip():
         messages.error(request, "반려 사유를 입력해주세요.")
@@ -127,7 +131,7 @@ def act_reject(request, doc_id: int):
 
 @login_required
 def admin_chair(request):
-    # ✅ 위원장 임명 페이지: 위원장(CHAIR) 또는 superuser만 접근
+    # ✅ 위원장 임명 페이지: 위원장(CHAIR)만 접근 (슈퍼유저를 포함할지 여부는 is_chair 구현에 따름)
     if not is_chair(request.user):
         raise Http404
 
@@ -136,6 +140,11 @@ def admin_chair(request):
     if request.method == "POST":
         user_id = request.POST.get("user_id")
         action = request.POST.get("action")
+
+        if not user_id or action not in {"add", "remove"}:
+            messages.error(request, "잘못된 요청입니다.")
+            return redirect("approvals:admin_chair")
+
         target = get_object_or_404(User, id=user_id)
 
         if action == "add":
@@ -144,11 +153,17 @@ def admin_chair(request):
         elif action == "remove":
             target.groups.remove(chair_group)
             messages.success(request, f"{target.username} 님의 위원장 권한을 해제했습니다.")
+
         return redirect("approvals:admin_chair")
 
     users = User.objects.all().order_by("username")
     chairs = chair_group.user_set.all().order_by("username")
-    return render(request, "approvals/admin_chair.html", {"users": users, "chairs": chairs, "chair_group": chair_group})
+    return render(
+        request,
+        "approvals/admin_chair.html",
+        {"users": users, "chairs": chairs, "chair_group": chair_group},
+    )
+
 
 @login_required
 def attachment_download(request, attachment_id: int):
@@ -159,11 +174,8 @@ def attachment_download(request, attachment_id: int):
         raise Http404
 
     file_handle = att.file.open("rb")
-
-    # 원본 파일명만 뽑기
     filename = os.path.basename(att.file.name)
 
-    # ✅ FileResponse + as_attachment 로 "무조건 다운로드"
     return FileResponse(
         file_handle,
         as_attachment=True,

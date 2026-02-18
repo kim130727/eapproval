@@ -50,4 +50,28 @@
     <button type="submit">상신</button>
   </form>
 </div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+
+  function enableToggle(selectId) {
+    const sel = document.getElementById(selectId);
+    if (!sel) return;
+
+    sel.addEventListener("pointerdown", function (e) {
+      const option = e.target;
+      if (option.tagName !== "OPTION") return;
+
+      e.preventDefault();
+      option.selected = !option.selected;
+      sel.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+  }
+
+  enableToggle("id_consultants");
+  enableToggle("id_approvers");
+  enableToggle("id_receivers");
+});
+</script>
+
 {% endblock %}

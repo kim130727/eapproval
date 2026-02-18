@@ -6,7 +6,7 @@ class Profile(models.Model):
     full_name = models.CharField("이름", max_length=50)
 
     def is_chair(self) -> bool:
-        return self.user.groups.filter(name="CHAIR").exists() or self.user.is_superuser
+        return self.user.groups.filter(name="CHAIR").exists()
 
     def display_name(self) -> str:
         # 이름이 없으면 username fallback
