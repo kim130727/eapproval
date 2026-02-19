@@ -1,9 +1,28 @@
 {% extends "base.html" %}
+{% load static %}
 {% block title %}회원가입 | 전자결재{% endblock %}
 
 {% block content %}
+
+  <!-- ✅ 헤더 아래 전체 폭 배너 -->
+  <div style="width:100%; margin-bottom:24px; text-align:center;">
+  <img
+    src="{% static 'img/auth_top.png' %}"
+    alt="전자결재 배너"
+    style="
+      width:100%;
+      max-height:320px;
+      height:auto;
+      display:inline-block;
+      object-fit:contain;
+    "
+  />
+  </div>
+
+  <!-- ✅ 회원가입 카드 -->
   <div class="card" style="max-width:520px; margin: 0 auto;">
     <h2 style="margin-top:0;">회원가입</h2>
+
     <form method="post">
       {% csrf_token %}
 
@@ -16,25 +35,41 @@
       <div class="field">
         <label for="{{ form.username.id_for_label }}">아이디</label>
         {{ form.username }}
-        {% if form.username.errors %}<div class="help" style="color:#dc2626;">{{ form.username.errors }}</div>{% endif %}
+        {% if form.username.errors %}
+          <div class="help" style="color:#dc2626;">
+            {{ form.username.errors }}
+          </div>
+        {% endif %}
       </div>
 
       <div class="field">
         <label for="{{ form.full_name.id_for_label }}">이름</label>
         {{ form.full_name }}
-        {% if form.full_name.errors %}<div class="help" style="color:#dc2626;">{{ form.full_name.errors }}</div>{% endif %}
+        {% if form.full_name.errors %}
+          <div class="help" style="color:#dc2626;">
+            {{ form.full_name.errors }}
+          </div>
+        {% endif %}
       </div>
 
       <div class="field">
         <label for="{{ form.password1.id_for_label }}">비밀번호</label>
         {{ form.password1 }}
-        {% if form.password1.errors %}<div class="help" style="color:#dc2626;">{{ form.password1.errors }}</div>{% endif %}
+        {% if form.password1.errors %}
+          <div class="help" style="color:#dc2626;">
+            {{ form.password1.errors }}
+          </div>
+        {% endif %}
       </div>
 
       <div class="field">
         <label for="{{ form.password2.id_for_label }}">비밀번호 확인</label>
         {{ form.password2 }}
-        {% if form.password2.errors %}<div class="help" style="color:#dc2626;">{{ form.password2.errors }}</div>{% endif %}
+        {% if form.password2.errors %}
+          <div class="help" style="color:#dc2626;">
+            {{ form.password2.errors }}
+          </div>
+        {% endif %}
       </div>
 
       <div class="row" style="margin-top:14px;">
@@ -43,4 +78,5 @@
       </div>
     </form>
   </div>
+
 {% endblock %}
