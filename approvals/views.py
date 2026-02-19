@@ -1,3 +1,4 @@
+# approvals/views.py
 import os
 
 from django.contrib import messages
@@ -147,7 +148,11 @@ def admin_chair(request):
 
     users = User.objects.all().order_by("username")
     chairs = chair_group.user_set.all().order_by("username")
-    return render(request, "approvals/admin_chair.html", {"users": users, "chairs": chairs})
+    return render(
+        request,
+        "approvals/admin_chair.html",
+        {"users": users, "chairs": chairs, "chair_group": chair_group},  # ✅ chair_group 전달
+    )
 
 
 @login_required
@@ -159,8 +164,3 @@ def attachment_download(request, attachment_id: int):
     file_handle = att.file.open("rb")
     filename = os.path.basename(att.file.name)
     return FileResponse(file_handle, as_attachment=True, filename=smart_str(filename))
-
-@login_required
-def received_list(request):
-    docs = received_docs(request.user)
-    return render(request, "approvals/doc_list.html", {"title": "수신/열람함", "docs": docs})

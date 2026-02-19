@@ -48,7 +48,10 @@
         <a href="{% url 'approvals:home' %}"><strong>전자결재</strong></a>
         <a class="btn" href="{% url 'approvals:doc_list' %}">내 문서함</a>
         <a class="btn" href="{% url 'approvals:inbox' %}">결재함</a>
+
+        <!-- ✅ received 링크 통일: approvals:received -->
         <a class="btn" href="{% url 'approvals:received' %}">수신함</a>
+
         <a class="btn btn-primary" href="{% url 'approvals:doc_create' %}">문서 상신</a>
 
         <span class="spacer"></span>
