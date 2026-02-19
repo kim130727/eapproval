@@ -1,3 +1,4 @@
+#approvals/permissions.py
 from .models import Document, DocumentLine
 
 CHAIR_GROUP = "CHAIR"
