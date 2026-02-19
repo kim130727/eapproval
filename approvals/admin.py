@@ -1,5 +1,6 @@
 from django.contrib import admin
 from .models import Document, DocumentLine, Attachment
+from accounts.models import Profile
 
 
 @admin.register(Document)

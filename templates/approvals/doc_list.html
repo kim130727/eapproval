@@ -1,0 +1,11 @@
+<h1>문서 목록</h1>
+<ul>
+  {% for d in docs %}
+    <li>
+      <a href="{% url 'approvals:detail' d.id %}">{{ d.title }}</a>
+      ({{ d.status }})
+    </li>
+  {% empty %}
+    <li>문서가 없습니다.</li>
+  {% endfor %}
+</ul>

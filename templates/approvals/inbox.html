@@ -1,0 +1,11 @@
+<h1>받은 문서함</h1>
+<ul>
+  {% for d in docs %}
+    <li>
+      <a href="{% url 'approvals:detail' d.id %}">{{ d.title }}</a>
+      ({{ d.status }})
+    </li>
+  {% empty %}
+    <li>받은 문서가 없습니다.</li>
+  {% endfor %}
+</ul>

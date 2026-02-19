@@ -5,8 +5,15 @@ from django.contrib.auth import get_user_model
 User = get_user_model()
 
 class SignupForm(UserCreationForm):
-    full_name = forms.CharField(label="이름", max_length=50)
+    full_name = forms.CharField(label="이름", max_length=150)
 
     class Meta(UserCreationForm.Meta):
         model = User
         fields = ("username", "full_name", "password1", "password2")
+
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        user.first_name = self.cleaned_data["full_name"]  # ✅ 통합 저장
+        if commit:
+            user.save()
+        return user

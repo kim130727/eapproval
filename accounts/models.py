@@ -2,13 +2,18 @@ from django.conf import settings
 from django.db import models
 
 class Profile(models.Model):
+    ROLE_MEMBER = "MEMBER"
+    ROLE_CHAIR = "CHAIR"
+    ROLE_CHOICES = [
+        (ROLE_MEMBER, "일반회원"),
+        (ROLE_CHAIR, "위원장"),
+    ]
+
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    full_name = models.CharField("이름", max_length=50)
+    phone = models.CharField(max_length=20, blank=True, null=True)
 
-    def is_chair(self) -> bool:
-        return self.user.groups.filter(name="CHAIR").exists()
+    # ✅ 추가
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default=ROLE_MEMBER)
 
-    def display_name(self) -> str:
-        # 이름이 없으면 username fallback
-        base = self.full_name or self.user.username
-        return f"{base} (위원장)" if self.is_chair() else base
+    def __str__(self):
+        return f"{self.user.username} ({self.role})"
