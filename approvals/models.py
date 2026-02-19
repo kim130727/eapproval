@@ -16,14 +16,13 @@ class Document(models.Model):
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="docs_created"
     )
-
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
-    current_line_order = models.PositiveIntegerField(default=1)  # 다음 처리자(협의/결재) 순번
+    current_line_order = models.PositiveIntegerField(default=1)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"[{self.get_status_display()}] {self.title}"
 
 
@@ -41,24 +40,21 @@ class DocumentLine(models.Model):
 
     document = models.ForeignKey(Document, on_delete=models.CASCADE, related_name="lines")
     role = models.CharField(max_length=10, choices=Role.choices)
-
-    order = models.PositiveIntegerField()  # 협의/결재는 순서가 중요
+    order = models.PositiveIntegerField()
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
 
     decision = models.CharField(max_length=10, choices=Decision.choices, default=Decision.PENDING)
     comment = models.CharField(max_length=300, blank=True)
-
     acted_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
-        ordering = ["role", "order", "id"]
+        ordering = ["order", "id"]
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.document_id} {self.role}#{self.order} {self.user}"
 
 
 def attachment_upload_to(instance, filename: str) -> str:
-    # ✅ created_at은 저장 전엔 None일 수 있으므로 now() 사용
     dt = timezone.localtime(timezone.now())
     return f"attachments/{dt:%Y/%m}/{filename}"
 
@@ -69,5 +65,5 @@ class Attachment(models.Model):
     uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
     created_at = models.DateTimeField(auto_now_add=True)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.file.name

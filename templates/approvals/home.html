@@ -1,3 +1,39 @@
-<h1>Approvals Home</h1>
-<p><a href="/approvals/docs/">문서 목록</a></p>
-<p><a href="/approvals/inbox/">받은 문서함</a></p>
+{% extends "base.html" %}
+{% block title %}홈 | 전자결재{% endblock %}
+
+{% block content %}
+  <div class="card">
+    <h2 style="margin-top:0;">대시보드</h2>
+    <p class="muted" style="margin-top:6px;">최소 기능(상신/결재/열람)만 있는 화면입니다.</p>
+
+    <div class="grid grid-3" style="margin-top:14px;">
+      <div class="card">
+        <div class="muted">내 문서함</div>
+        <div style="font-size:28px; font-weight:800;">{{ my_count }}</div>
+        <div style="margin-top:10px;">
+          <a class="btn" href="{% url 'approvals:doc_list' %}">열기</a>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="muted">결재함(내 처리 대기)</div>
+        <div style="font-size:28px; font-weight:800;">{{ inbox_count }}</div>
+        <div style="margin-top:10px;">
+          <a class="btn" href="{% url 'approvals:inbox' %}">열기</a>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="muted">수신/열람함</div>
+        <div style="font-size:28px; font-weight:800;">{{ recv_count }}</div>
+        <div style="margin-top:10px;">
+          <a class="btn" href="{% url 'approvals:received' %}">열기</a>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:14px;">
+      <a class="btn btn-primary" href="{% url 'approvals:doc_create' %}">+ 새 문서 상신</a>
+    </div>
+  </div>
+{% endblock %}

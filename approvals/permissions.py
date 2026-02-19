@@ -1,8 +1,6 @@
-from django.contrib.auth.models import Group
 from .models import Document, DocumentLine
 
-
-CHAIR_GROUP = "CHAIR"  # ✅ 위원장 그룹명
+CHAIR_GROUP = "CHAIR"
 
 
 def is_chair(user) -> bool:
@@ -26,5 +24,4 @@ def can_view_document(user, doc: Document) -> bool:
 
 
 def can_act_on_line(user, line: DocumentLine) -> bool:
-    # 본인 라인만 처리 가능 (위원장은 대리처리 허용하려면 여기에서 풀어도 됨)
     return user.is_authenticated and (user.is_superuser or line.user_id == user.id)

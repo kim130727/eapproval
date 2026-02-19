@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}문서 상세 | 전자결재{% endblock %}
+
+{% block content %}
+  <div class="card">
+    <div class="row" style="justify-content:space-between;">
+      <div>
+        <h2 style="margin:0;">{{ doc.title }}</h2>
+        <div class="muted" style="margin-top:6px;">
+          <span class="badge">{{ doc.get_status_display }}</span>
+          <span class="mono">#{{ doc.id }}</span>
+          · 작성자 {{ doc.created_by.username }}
+          · 생성 {{ doc.created_at|date:"Y-m-d H:i" }}
+          · 수정 {{ doc.updated_at|date:"Y-m-d H:i" }}
+        </div>
+      </div>
+      <div>
+        <a class="btn" href="{% url 'approvals:doc_list' %}">목록</a>
+      </div>
+    </div>
+
+    <hr style="border:none; border-top:1px solid #eee; margin:14px 0;">
+
+    <div class="card" style="background:#fafafa;">
+      <div class="muted" style="font-size:12px; margin-bottom:6px;">내용</div>
+      <div style="white-space:pre-wrap;">{{ doc.content|default:"(내용 없음)" }}</div>
+    </div>
+
+    <div style="margin-top:14px;">
+      <h3 style="margin:0 0 8px 0;">결재/협의 라인</h3>
+      <table class="table">
+        <thead>
+          <tr>
+            <th style="width:70px;">순서</th>
+            <th style="width:110px;">구분</th>
+            <th>대상</th>
+            <th style="width:110px;">상태</th>
+            <th>코멘트</th>
+            <th style="width:160px;">처리시각</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for line in doc.lines.all %}
+          <tr>
+            <td>{{ line.order }}</td>
+            <td><span class="badge">{{ line.get_role_display }}</span></td>
+            <td>{{ line.user.username }}</td>
+            <td><span class="badge">{{ line.get_decision_display }}</span></td>
+            <td class="muted">{{ line.comment|default:"" }}</td>
+            <td class="muted">
+              {% if line.acted_at %}{{ line.acted_at|date:"Y-m-d H:i" }}{% else %}-{% endif %}
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="6" class="muted">라인이 없습니다.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div style="margin-top:14px;">
+      <h3 style="margin:0 0 8px 0;">첨부파일</h3>
+      <div class="card">
+        {% for att in doc.attachments.all %}
+          <div class="row" style="justify-content:space-between;">
+            <div class="mono" style="font-size:13px;">{{ att.file.name }}</div>
+            <a class="btn" href="{% url 'approvals:attachment_download' att.id %}">다운로드</a>
+          </div>
+          {% if not forloop.last %}<hr style="border:none; border-top:1px solid #eee; margin:10px 0;">{% endif %}
+        {% empty %}
+          <div class="muted">첨부파일이 없습니다.</div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div style="margin-top:14px;">
+      <h3 style="margin:0 0 8px 0;">내 처리</h3>
+
+      {% if can_act %}
+        <div class="card">
+          <div class="muted" style="margin-bottom:10px;">
+            현재 처리자: <strong>{{ current_line.user.username }}</strong>
+            · 구분: <strong>{{ current_line.get_role_display }}</strong>
+            · 순서: <strong>{{ current_line.order }}</strong>
+          </div>
+
+          <form method="post" action="{% url 'approvals:act_approve' doc.id %}">
+            {% csrf_token %}
+            <div class="field">
+              <label for="comment_approve">코멘트(선택)</label>
+              <input id="comment_approve" type="text" name="comment" placeholder="예: 확인했습니다." />
+              <div class="help">승인/협의 완료 처리 시 기록됩니다.</div>
+            </div>
+            <button class="btn btn-primary" type="submit">승인 / 협의완료</button>
+          </form>
+
+          <hr style="border:none; border-top:1px solid #eee; margin:12px 0;">
+
+          <form method="post" action="{% url 'approvals:act_reject' doc.id %}">
+            {% csrf_token %}
+            <div class="field">
+              <label for="comment_reject">반려 사유(필수)</label>
+              <input id="comment_reject" type="text" name="comment" placeholder="예: 증빙이 누락되었습니다." required />
+            </div>
+            <button class="btn btn-danger" type="submit">반려</button>
+          </form>
+        </div>
+      {% else %}
+        <div class="card muted">
+          현재 문서에 대해 처리할 권한(내 대기 라인)이 없습니다.
+        </div>
+      {% endif %}
+    </div>
+
+  </div>
+{% endblock %}

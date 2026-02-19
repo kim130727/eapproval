@@ -1,11 +1,45 @@
-<h1>문서 목록</h1>
-<ul>
-  {% for d in docs %}
-    <li>
-      <a href="{% url 'approvals:detail' d.id %}">{{ d.title }}</a>
-      ({{ d.status }})
-    </li>
-  {% empty %}
-    <li>문서가 없습니다.</li>
-  {% endfor %}
-</ul>
+{% extends "base.html" %}
+{% block title %}{{ title }} | 전자결재{% endblock %}
+
+{% block content %}
+  <div class="card">
+    <div class="row" style="justify-content:space-between;">
+      <h2 style="margin:0;">{{ title }}</h2>
+      <a class="btn btn-primary" href="{% url 'approvals:doc_create' %}">문서 상신</a>
+    </div>
+
+    <div style="margin-top:12px;">
+      <table class="table">
+        <thead>
+          <tr>
+            <th style="width:120px;">상태</th>
+            <th>제목</th>
+            <th style="width:160px;">작성자</th>
+            <th style="width:160px;">수정</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for doc in docs %}
+          <tr>
+            <td><span class="badge">{{ doc.get_status_display }}</span></td>
+            <td>
+              <a href="{% url 'approvals:doc_detail' doc.id %}">
+                {{ doc.title }}
+              </a>
+              <div class="muted" style="font-size:12px; margin-top:4px;">
+                #{{ doc.id }} · 현재순서 {{ doc.current_line_order }}
+              </div>
+            </td>
+            <td>{{ doc.created_by.username }}</td>
+            <td class="muted">{{ doc.updated_at|date:"Y-m-d H:i" }}</td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="4" class="muted">문서가 없습니다.</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endblock %}

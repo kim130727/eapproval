@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}문서 상신 | 전자결재{% endblock %}
+
+{% block content %}
+  <div class="card" style="max-width:900px; margin: 0 auto;">
+    <h2 style="margin-top:0;">문서 상신</h2>
+
+    <form method="post" enctype="multipart/form-data">
+      {% csrf_token %}
+
+      {% if form.non_field_errors %}
+        <div class="msg error">
+          {{ form.non_field_errors }}
+        </div>
+      {% endif %}
+
+      <div class="field">
+        <label for="{{ form.title.id_for_label }}">제목</label>
+        {{ form.title }}
+        {% if form.title.errors %}<div class="help" style="color:#dc2626;">{{ form.title.errors }}</div>{% endif %}
+      </div>
+
+      <div class="field">
+        <label for="{{ form.content.id_for_label }}">내용</label>
+        {{ form.content }}
+        {% if form.content.errors %}<div class="help" style="color:#dc2626;">{{ form.content.errors }}</div>{% endif %}
+      </div>
+
+      <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 12px;">
+        <div class="field">
+          <label for="{{ form.consultants.id_for_label }}">협의자</label>
+          {{ form.consultants }}
+          <div class="help">필요 시 여러 명 선택</div>
+          {% if form.consultants.errors %}<div class="help" style="color:#dc2626;">{{ form.consultants.errors }}</div>{% endif %}
+        </div>
+
+        <div class="field">
+          <label for="{{ form.approvers.id_for_label }}">결재자(순서대로)</label>
+          {{ form.approvers }}
+          <div class="help">{{ form.approvers.help_text }}</div>
+          {% if form.approvers.errors %}<div class="help" style="color:#dc2626;">{{ form.approvers.errors }}</div>{% endif %}
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="{{ form.receivers.id_for_label }}">수신/열람자</label>
+        {{ form.receivers }}
+        <div class="help">완료 후 열람자(수신자) 목록</div>
+        {% if form.receivers.errors %}<div class="help" style="color:#dc2626;">{{ form.receivers.errors }}</div>{% endif %}
+      </div>
+
+      <div class="field">
+        <label for="{{ form.files.id_for_label }}">첨부파일</label>
+        {{ form.files }}
+        <div class="help">여러 파일 선택 가능</div>
+        {% if form.files.errors %}<div class="help" style="color:#dc2626;">{{ form.files.errors }}</div>{% endif %}
+      </div>
+
+      <div class="row" style="margin-top:14px;">
+        <button class="btn btn-primary" type="submit">상신하기</button>
+        <a class="btn" href="{% url 'approvals:home' %}">취소</a>
+      </div>
+    </form>
+  </div>
+{% endblock %}
