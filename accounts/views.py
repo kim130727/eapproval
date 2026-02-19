@@ -1,12 +1,27 @@
 # accounts/views.py
-from django.contrib.auth import login
+from django.contrib.auth import login, get_user_model
+from django.contrib.auth.models import Group
 from django.contrib.auth.views import LoginView, LogoutView
 from django.contrib.admin.views.decorators import staff_member_required
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse_lazy
 
+from approvals.permissions import CHAIR_GROUP  # "CHAIR" 표준값 재사용
 from .forms import SignupForm
 from .models import Profile
+
+User = get_user_model()
+
+# 표준이 아닌 위원장 그룹명 후보(관리자가 만들어둔 것들)
+LEGACY_CHAIR_GROUP_NAMES = [
+    "chair",
+    "위원장",
+    "위원장그룹",
+    "위원장 그룹",
+    "Chair",
+    "CHAIR ",  # 공백 실수 대비
+    " chair",
+]
 
 
 @staff_member_required
@@ -15,11 +30,34 @@ def profile_list(request):
     return render(request, "accounts/profile_list.html", {"profiles": profiles})
 
 
+def _normalize_chair_groups_for_user(user: User, *, make_chair: bool) -> None:
+    """
+    make_chair=True  => user를 표준 그룹(CHAIR)에만 포함시키고, legacy chair류 그룹에서는 제거
+    make_chair=False => user를 표준 그룹(CHAIR)에서 제거하고, legacy chair류 그룹에서도 제거
+    """
+    chair_group, _ = Group.objects.get_or_create(name=CHAIR_GROUP)
+
+    # legacy 그룹들은 존재하면 찾아서 제거(없으면 무시)
+    legacy_groups = Group.objects.filter(name__in=LEGACY_CHAIR_GROUP_NAMES)
+
+    if make_chair:
+        user.groups.add(chair_group)
+    else:
+        user.groups.remove(chair_group)
+
+    if legacy_groups.exists():
+        user.groups.remove(*legacy_groups)
+
+
 @staff_member_required
 def appoint_chair_view(request, profile_id):
     profile = get_object_or_404(Profile, id=profile_id)
     profile.role = Profile.ROLE_CHAIR
     profile.save(update_fields=["role"])
+
+    # ✅ 그룹도 표준(CHair)로 동기화 + legacy chair류 그룹 정리
+    _normalize_chair_groups_for_user(profile.user, make_chair=True)
+
     return redirect("accounts:profile_list")
 
 
@@ -28,6 +66,10 @@ def demote_chair_view(request, profile_id):
     profile = get_object_or_404(Profile, id=profile_id)
     profile.role = Profile.ROLE_MEMBER
     profile.save(update_fields=["role"])
+
+    # ✅ 위원장 해제 시 CHAIR 그룹에서도 제거 + legacy chair류 그룹 정리
+    _normalize_chair_groups_for_user(profile.user, make_chair=False)
+
     return redirect("accounts:profile_list")
 
 
@@ -36,11 +78,14 @@ def signup_view(request):
         form = SignupForm(request.POST)
         if form.is_valid():
             user = form.save()  # SignupForm.save()가 user.first_name 저장
+
             # ✅ Profile도 확실히 업데이트
             Profile.objects.update_or_create(
                 user=user,
                 defaults={"full_name": form.cleaned_data["full_name"]},
             )
+
+            # 신규 유저는 기본 MEMBER이므로 그룹은 건드리지 않음
             login(request, user)
             return redirect("approvals:home")
     else:

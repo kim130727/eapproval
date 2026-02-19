@@ -46,6 +46,7 @@
       {{ form.files }}
       {{ form.files.errors }}
     </div>
+
     {{ form.as_p }}
     <button type="submit">상신</button>
   </form>
@@ -57,13 +58,33 @@ document.addEventListener("DOMContentLoaded", function () {
   function enableToggle(selectId) {
     const sel = document.getElementById(selectId);
     if (!sel) return;
+    if (!sel.multiple) return;
 
+    // 모바일 터치/펜/마우스 모두: pointerdown
     sel.addEventListener("pointerdown", function (e) {
-      const option = e.target;
-      if (option.tagName !== "OPTION") return;
+      // option을 안정적으로 찾기
+      let opt = null;
 
+      // 1) 대부분 브라우저: target이 option(또는 option에 가까운 노드)
+      if (e.target && typeof e.target.closest === "function") {
+        const found = e.target.closest("option");
+        if (found && found.parentElement === sel) opt = found;
+      }
+
+      // 2) 일부 환경 fallback: 좌표 기반 대략 index 추정
+      if (!opt) {
+        const rect = sel.getBoundingClientRect();
+        const y = e.clientY - rect.top;
+        const approxLineHeight = 20; // 대략 값(기본 select에서 충분)
+        const idx = Math.floor(y / approxLineHeight);
+        if (idx >= 0 && idx < sel.options.length) opt = sel.options[idx];
+      }
+
+      if (!opt) return;
+
+      // ✅ 기본 동작을 막고 "클릭+클릭" 토글로 강제
       e.preventDefault();
-      option.selected = !option.selected;
+      opt.selected = !opt.selected;
       sel.dispatchEvent(new Event("change", { bubbles: true }));
     });
   }

@@ -62,4 +62,52 @@
       </div>
     </form>
   </div>
+
+  <script>
+  document.addEventListener("DOMContentLoaded", function () {
+
+    function getOptionFromPointer(sel, e) {
+      // 1) 보통은 option이 target으로 잡힘
+      if (e.target && typeof e.target.closest === "function") {
+        const opt = e.target.closest("option");
+        if (opt && opt.parentElement === sel) return opt;
+      }
+
+      // 2) 일부 모바일/브라우저 fallback: 좌표 기반으로 대략 index 추정
+      const rect = sel.getBoundingClientRect();
+      const y = e.clientY - rect.top;
+
+      // 기본 multiple select에서 충분히 동작하는 수준의 근사치
+      const approxLineHeight = 20;
+      const idx = Math.floor(y / approxLineHeight);
+
+      if (idx >= 0 && idx < sel.options.length) return sel.options[idx];
+      return null;
+    }
+
+    function enableToggle(selectId) {
+      const sel = document.getElementById(selectId);
+      if (!sel) return;
+      if (!sel.multiple) return; // 멀티셀렉트만 적용
+
+      // ✅ 터치/펜/마우스 모두 커버 + "클릭+클릭" 토글
+      sel.addEventListener("pointerdown", function (e) {
+        const opt = getOptionFromPointer(sel, e);
+        if (!opt) return;
+
+        // 기본 동작(CTRL 필요, 드래그 선택 등) 막고 토글로 강제
+        e.preventDefault();
+        opt.selected = !opt.selected;
+
+        // Django 폼 바인딩/검증용 change 이벤트
+        sel.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+    }
+
+    // Django 기본 id 규칙: id_필드명
+    enableToggle("id_consultants");
+    enableToggle("id_approvers");
+    enableToggle("id_receivers");
+  });
+  </script>
 {% endblock %}
