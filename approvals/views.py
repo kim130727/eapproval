@@ -9,6 +9,7 @@ from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.encoding import smart_str
 
+from accounts.utils import sync_profile_role_from_groups  # ✅ 추가
 from .forms import DocumentForm
 from .models import Attachment, Document
 from .permissions import CHAIR_GROUP, can_view_document, is_chair
@@ -144,6 +145,10 @@ def admin_chair(request):
         else:
             target.groups.remove(chair_group)
             messages.success(request, f"{target.username} 님의 위원장 권한을 해제했습니다.")
+
+        # ✅ role 캐시 동기화(그룹이 단일 기준)
+        sync_profile_role_from_groups(target)
+
         return redirect("approvals:admin_chair")
 
     users = User.objects.all().order_by("username")
@@ -151,7 +156,7 @@ def admin_chair(request):
     return render(
         request,
         "approvals/admin_chair.html",
-        {"users": users, "chairs": chairs, "chair_group": chair_group},  # ✅ chair_group 전달
+        {"users": users, "chairs": chairs, "chair_group": chair_group},
     )
 
 

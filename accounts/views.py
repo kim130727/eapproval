@@ -12,7 +12,6 @@ from .models import Profile
 
 User = get_user_model()
 
-# 표준이 아닌 위원장 그룹명 후보(관리자가 만들어둔 것들)
 LEGACY_CHAIR_GROUP_NAMES = [
     "chair",
     "위원장",
@@ -32,12 +31,11 @@ def profile_list(request):
 
 def _normalize_chair_groups_for_user(user: User, *, make_chair: bool) -> None:
     """
-    make_chair=True  => user를 표준 그룹(CHAIR)에만 포함시키고, legacy chair류 그룹에서는 제거
-    make_chair=False => user를 표준 그룹(CHAIR)에서 제거하고, legacy chair류 그룹에서도 제거
+    ✅ 단일 기준: CHAIR 그룹
+    - make_chair=True  => user를 CHAIR 그룹에 포함 + legacy 그룹 제거
+    - make_chair=False => user를 CHAIR 그룹에서 제거 + legacy 그룹 제거
     """
     chair_group, _ = Group.objects.get_or_create(name=CHAIR_GROUP)
-
-    # legacy 그룹들은 존재하면 찾아서 제거(없으면 무시)
     legacy_groups = Group.objects.filter(name__in=LEGACY_CHAIR_GROUP_NAMES)
 
     if make_chair:
@@ -52,22 +50,18 @@ def _normalize_chair_groups_for_user(user: User, *, make_chair: bool) -> None:
 @staff_member_required
 def appoint_chair_view(request, profile_id):
     profile = get_object_or_404(Profile, id=profile_id)
-    profile.role = Profile.ROLE_CHAIR
-    profile.save(update_fields=["role"])
 
-    # ✅ 그룹도 표준(CHair)로 동기화 + legacy chair류 그룹 정리
+    # ✅ 그룹이 단일 기준
     _normalize_chair_groups_for_user(profile.user, make_chair=True)
 
+    # role은 signals(m2m_changed)에서 자동 동기화됨
     return redirect("accounts:profile_list")
 
 
 @staff_member_required
 def demote_chair_view(request, profile_id):
     profile = get_object_or_404(Profile, id=profile_id)
-    profile.role = Profile.ROLE_MEMBER
-    profile.save(update_fields=["role"])
 
-    # ✅ 위원장 해제 시 CHAIR 그룹에서도 제거 + legacy chair류 그룹 정리
     _normalize_chair_groups_for_user(profile.user, make_chair=False)
 
     return redirect("accounts:profile_list")
@@ -77,15 +71,14 @@ def signup_view(request):
     if request.method == "POST":
         form = SignupForm(request.POST)
         if form.is_valid():
-            user = form.save()  # SignupForm.save()가 user.first_name 저장
+            user = form.save()
 
-            # ✅ Profile도 확실히 업데이트
             Profile.objects.update_or_create(
                 user=user,
                 defaults={"full_name": form.cleaned_data["full_name"]},
             )
 
-            # 신규 유저는 기본 MEMBER이므로 그룹은 건드리지 않음
+            # 신규 유저는 기본 MEMBER(그룹은 건드리지 않음)
             login(request, user)
             return redirect("approvals:home")
     else:

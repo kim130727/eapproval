@@ -4,6 +4,12 @@ from django.db import models
 
 
 class Profile(models.Model):
+    """
+    ✅ role은 '권한 기준'이 아니라 '표시/검색용 캐시'입니다.
+    - 권한/필터 기준(단일 기준): User.groups 의 CHAIR 그룹
+    - role 값은 signals(m2m_changed)로 자동 동기화됩니다.
+    """
+
     ROLE_MEMBER = "MEMBER"
     ROLE_CHAIR = "CHAIR"
 
@@ -15,6 +21,8 @@ class Profile(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     full_name = models.CharField(max_length=150, blank=True, default="")
     phone = models.CharField(max_length=20, blank=True, null=True)
+
+    # ✅ 표시/검색용 캐시 필드(그룹이 단일 기준)
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default=ROLE_MEMBER)
 
     def display_name(self):
