@@ -58,6 +58,10 @@
 
         {% if user.is_authenticated %}
           <span class="muted">안녕하세요, <strong>{{ user.username }}</strong>님</span>
+
+          <!-- ✅ 추가: 비밀번호 변경 -->
+          <a class="btn" href="{% url 'accounts:password_change' %}">비밀번호 변경</a>
+
           <form method="post" action="{% url 'accounts:logout' %}" style="display:inline;">
             {% csrf_token %}
             <button class="btn" type="submit">로그아웃</button>
