@@ -38,7 +38,13 @@
           <label for="{{ form.approvers.id_for_label }}">결재자(순서대로)</label>
           {{ form.approvers }}
           <div class="help">{{ form.approvers.help_text }}</div>
+          <div class="help" style="margin-top:6px;">
+            ✅ <strong>선택한 순서가 그대로 결재 순서</strong>로 저장됩니다.
+          </div>
           {% if form.approvers.errors %}<div class="help" style="color:#dc2626;">{{ form.approvers.errors }}</div>{% endif %}
+
+          <!-- ✅ 서버로 순서 전달하는 Hidden Input (반드시 렌더링) -->
+          {{ form.approvers_order }}
         </div>
       </div>
 
@@ -66,18 +72,19 @@
   <script>
   document.addEventListener("DOMContentLoaded", function () {
 
+    // ===== 공통 유틸 =====
     function getOptionFromPointer(sel, e) {
-      // 1) 보통은 option이 target으로 잡힘
+      // 1) option이 target으로 잡히는 경우
       if (e.target && typeof e.target.closest === "function") {
         const opt = e.target.closest("option");
         if (opt && opt.parentElement === sel) return opt;
       }
 
-      // 2) 일부 모바일/브라우저 fallback: 좌표 기반으로 대략 index 추정
+      // 2) 일부 환경 fallback: 좌표 기반 index 추정
       const rect = sel.getBoundingClientRect();
       const y = e.clientY - rect.top;
 
-      // 기본 multiple select에서 충분히 동작하는 수준의 근사치
+      // 대략적인 줄 높이 (브라우저별 차이 있지만 토글 용도로 충분)
       const approxLineHeight = 20;
       const idx = Math.floor(y / approxLineHeight);
 
@@ -85,29 +92,117 @@
       return null;
     }
 
-    function enableToggle(selectId) {
+    // ===== 순서 저장 로직(결재자 전용) =====
+    function setupApproverOrder(selectId, hiddenId) {
       const sel = document.getElementById(selectId);
-      if (!sel) return;
-      if (!sel.multiple) return; // 멀티셀렉트만 적용
+      const hidden = document.getElementById(hiddenId);
+      if (!sel || !hidden) return;
+      if (!sel.multiple) return;
 
-      // ✅ 터치/펜/마우스 모두 커버 + "클릭+클릭" 토글
+      // 클릭(토글) 순서대로 id 문자열을 저장
+      // 예: ["12","5","9"]
+      let order = [];
+
+      // ✅ 초기 로딩 시(수정폼/에러 리렌더 등) 이미 선택된 것 반영
+      // 기본 선택은 DOM 순서이므로, 초기에는 그 순서를 그대로 시작점으로 둡니다.
+      (function initFromSelected() {
+        const selected = Array.from(sel.options)
+          .filter(o => o.selected)
+          .map(o => String(o.value));
+        order = selected.slice();
+        hidden.value = order.join(",");
+      })();
+
+      function syncHidden() {
+        hidden.value = order.join(",");
+      }
+
+      function addToOrder(id) {
+        // 중복 제거 후 뒤에 붙여 "선택한 순서" 유지
+        order = order.filter(x => x !== id);
+        order.push(id);
+      }
+
+      function removeFromOrder(id) {
+        order = order.filter(x => x !== id);
+      }
+
+      // ✅ pointerdown에서 기본 다중선택 동작을 막고 토글 UX 제공
       sel.addEventListener("pointerdown", function (e) {
         const opt = getOptionFromPointer(sel, e);
         if (!opt) return;
 
-        // 기본 동작(CTRL 필요, 드래그 선택 등) 막고 토글로 강제
         e.preventDefault();
-        opt.selected = !opt.selected;
+
+        const id = String(opt.value);
+        const willSelect = !opt.selected;
+
+        opt.selected = willSelect;
+
+        if (willSelect) {
+          addToOrder(id);
+        } else {
+          removeFromOrder(id);
+        }
+
+        syncHidden();
 
         // Django 폼 바인딩/검증용 change 이벤트
         sel.dispatchEvent(new Event("change", { bubbles: true }));
       });
+
+      // ✅ 키보드/기타 입력으로 선택이 변할 수 있으니 change에서도 안전하게 보정
+      sel.addEventListener("change", function () {
+        const selectedIds = new Set(
+          Array.from(sel.options).filter(o => o.selected).map(o => String(o.value))
+        );
+
+        // order에서 선택 해제된 것은 제거
+        order = order.filter(id => selectedIds.has(id));
+
+        // 새로 선택된 것이 있는데 order에 없으면 DOM 순서대로 뒤에 붙임(안전 fallback)
+        const newlySelected = Array.from(selectedIds).filter(id => !order.includes(id));
+        for (const id of newlySelected) order.push(id);
+
+        syncHidden();
+      });
+
+      // ✅ 제출 직전에도 한번 동기화 (혹시모를 상황 대비)
+      const form = sel.closest("form");
+      if (form) {
+        form.addEventListener("submit", function () {
+          // 최종 검증: 현재 선택된 것만 남기기
+          const selectedIds = new Set(
+            Array.from(sel.options).filter(o => o.selected).map(o => String(o.value))
+          );
+          order = order.filter(id => selectedIds.has(id));
+          hidden.value = order.join(",");
+        });
+      }
     }
 
-    // Django 기본 id 규칙: id_필드명
+    // ===== 토글만 적용(협의자/수신자) =====
+    function enableToggle(selectId) {
+      const sel = document.getElementById(selectId);
+      if (!sel) return;
+      if (!sel.multiple) return;
+
+      sel.addEventListener("pointerdown", function (e) {
+        const opt = getOptionFromPointer(sel, e);
+        if (!opt) return;
+
+        e.preventDefault();
+        opt.selected = !opt.selected;
+        sel.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+    }
+
+    // Django 기본 id 규칙: id_필드명 / hidden은 id_approvers_order
     enableToggle("id_consultants");
-    enableToggle("id_approvers");
     enableToggle("id_receivers");
+
+    // ✅ 결재자: 토글 + 순서 저장
+    setupApproverOrder("id_approvers", "id_approvers_order");
   });
   </script>
 {% endblock %}
