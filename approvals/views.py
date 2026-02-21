@@ -76,7 +76,7 @@ def doc_create(request):
                 title=form.cleaned_data["title"],
                 content=form.cleaned_data["content"],
                 consultants=form.cleaned_data["consultants"],
-                approvers=form.cleaned_data["approvers"],
+                approvers=list(form.cleaned_data["approvers"]),
                 receivers=form.cleaned_data["receivers"],
                 files=form.cleaned_data["files"],
             )
