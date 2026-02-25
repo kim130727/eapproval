@@ -1,205 +1,190 @@
+# approvals/notify.py
 from __future__ import annotations
 
-from typing import Optional
+from dataclasses import dataclass
+from typing import Iterable, Optional
 
 from django.conf import settings
+from django.contrib import messages
 from django.core.mail import send_mail
-from django.urls import reverse
+from django.utils.html import strip_tags
+
+from .models import Document, DocumentLine
 
 
-def _build_doc_url(request, doc_id: int) -> str:
-    """
-    문서 상세 URL 생성
+@dataclass(frozen=True)
+class Recipient:
+    user: object
+    email: str
 
-    우선순위:
-    1) request 존재 -> request.build_absolute_uri()
-    2) request 없음 -> settings.SITE_BASE_URL 사용
-    3) SITE_BASE_URL 없음 -> 상대경로 반환
-    """
-    path = reverse("approvals:doc_detail", args=[doc_id])
 
-    if request is not None:
-        return request.build_absolute_uri(path)
+def _get_user_email(user) -> str:
+    if not user:
+        return ""
+    return (getattr(user, "email", "") or "").strip()
 
-    base_url = getattr(settings, "SITE_BASE_URL", "").rstrip("/")
-    if base_url:
-        return f"{base_url}{path}"
 
+def _iter_recipients(users: Iterable[object]) -> list[Recipient]:
+    recips: list[Recipient] = []
+    for u in users:
+        email = _get_user_email(u)
+        if email:
+            recips.append(Recipient(user=u, email=email))
+    # 이메일 중복 제거
+    seen = set()
+    uniq: list[Recipient] = []
+    for r in recips:
+        if r.email in seen:
+            continue
+        seen.add(r.email)
+        uniq.append(r)
+    return uniq
+
+
+def _doc_url(doc: Document, request=None) -> str:
+    # 1) Document.get_absolute_url 있으면 사용
+    path = None
+    if hasattr(doc, "get_absolute_url"):
+        try:
+            path = doc.get_absolute_url()
+        except Exception:
+            path = None
+
+    # 2) 없으면 관례적 URL fallback
+    if not path:
+        path = f"/approvals/documents/{doc.pk}/"
+
+    # request 있으면 절대 URL로
+    if request:
+        try:
+            return request.build_absolute_uri(path)
+        except Exception:
+            return path
     return path
 
 
-def _send_mail(to_email: str, subject: str, body: str) -> None:
-    if not to_email:
+def _toast(request, level: str, text: str) -> None:
+    if not request:
+        return
+    fn = {
+        "success": messages.success,
+        "info": messages.info,
+        "warning": messages.warning,
+        "error": messages.error,
+    }.get(level, messages.info)
+    fn(request, text)
+
+
+def _send_email(subject: str, body: str, to_emails: list[str]) -> None:
+    if not to_emails:
+        return
+    from_email = getattr(settings, "DEFAULT_FROM_EMAIL", None)
+    if not from_email:
+        # 메일 설정이 없으면 조용히 skip
+        return
+    try:
+        send_mail(
+            subject=subject,
+            message=strip_tags(body),
+            from_email=from_email,
+            recipient_list=to_emails,
+            fail_silently=True,
+        )
+    except Exception:
+        # 알림 실패가 결재 흐름을 깨면 안됨
+        pass
+
+
+def _active_roles():
+    return [DocumentLine.Role.CONSULT, DocumentLine.Role.APPROVE]
+
+
+def _pending_active_lines(doc: Document):
+    return doc.lines.filter(
+        role__in=_active_roles(),
+        decision=DocumentLine.Decision.PENDING,
+    ).order_by("order")
+
+
+def _current_pending_line(doc: Document):
+    return doc.lines.filter(
+        role__in=_active_roles(),
+        order=doc.current_line_order,
+        decision=DocumentLine.Decision.PENDING,
+    ).first()
+
+
+def notify_on_submit(*, request=None, doc: Document, user=None) -> None:
+    """
+    상신 알림: 협의자+결재자(활성 라인)의 '전체'에게 알림.
+    """
+    url = _doc_url(doc, request=request)
+    pending = _pending_active_lines(doc)
+    recipients = _iter_recipients([ln.user for ln in pending])
+
+    subject = f"[전자결재] 상신: {doc.title}"
+    body = f"문서가 상신되었습니다.\n\n제목: {doc.title}\n링크: {url}"
+
+    _toast(request, "info", f"상신 처리되었습니다. ({doc.title})")
+    _send_email(subject, body, [r.email for r in recipients])
+
+
+def notify_on_line_approved(*, request=None, doc: Document, user) -> None:
+    """
+    라인 승인/협의 완료 알림:
+    - 다음 처리자(다음 pending 라인)에게 알림
+    - 다음 라인이 없으면 완료 알림(상신자)
+    """
+    url = _doc_url(doc, request=request)
+    next_line = _current_pending_line(doc)
+
+    actor_name = getattr(user, "get_full_name", lambda: "")() or getattr(user, "username", "") or "처리자"
+
+    if next_line:
+        recipients = _iter_recipients([next_line.user])
+        subject = f"[전자결재] 처리 요청: {doc.title}"
+        body = (
+            f"이전 단계가 처리되었습니다.\n\n"
+            f"문서: {doc.title}\n"
+            f"처리자: {actor_name}\n"
+            f"다음 처리자: {getattr(next_line.user, 'username', '')}\n"
+            f"링크: {url}"
+        )
+        _toast(request, "info", f"다음 처리자에게 알림을 보냈습니다. ({doc.title})")
+        _send_email(subject, body, [r.email for r in recipients])
         return
 
-    send_mail(
-        subject=subject,
-        message=body,
-        from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
-        recipient_list=[to_email],
-        fail_silently=True,
-    )
+    # 완료면 상신자에게 완료 알림
+    notify_on_completed(request=request, doc=doc, user=getattr(doc, "created_by", None))
 
 
-def _safe_title(doc) -> str:
-    return getattr(doc, "title", "") or getattr(doc, "subject", "") or f"문서#{getattr(doc, 'id', '')}"
-
-
-def _pick_user_email(user) -> str:
-    return getattr(user, "email", "") or ""
-
-
-def send_document_notification(request, doc, user, subject: str, message: str) -> None:
-    doc_url = _build_doc_url(request, doc.id)
-    body = f"{message}\n\n문서 보기:\n{doc_url}"
-    _send_mail(_pick_user_email(user), subject, body)
-
-
-# ============================================================
-# ✅ services.py 호환 wrapper 들 (ImportError 방지용)
-# ============================================================
-
-def notify_on_created(request, doc, user) -> None:
-    send_document_notification(
-        request=request,
-        doc=doc,
-        user=user,
-        subject="[전자결재] 결재 문서가 등록되었습니다",
-        message=f"문서 '{_safe_title(doc)}'가 등록되었습니다.",
-    )
-
-
-def notify_on_completed(request, doc, user=None) -> None:
+def notify_on_completed(*, request=None, doc: Document, user=None) -> None:
     """
-    기존 코드에서 user를 안 넘길 수도 있어서, doc에서 후보를 찾아봅니다.
-    프로젝트 모델 필드명에 맞게 created_by/requester 등을 조정 가능.
+    완료 알림: 기본은 상신자(creator)에게.
+    user를 넘기면 그 사용자에게도/또는 대체로 보낼 수 있음.
     """
-    target = user or getattr(doc, "created_by", None) or getattr(doc, "requester", None)
-    if not target:
-        return
+    url = _doc_url(doc, request=request)
 
-    send_document_notification(
-        request=request,
-        doc=doc,
-        user=target,
-        subject="[전자결재] 결재가 완료되었습니다",
-        message=f"문서 '{_safe_title(doc)}' 결재가 완료되었습니다.",
-    )
+    target = user or getattr(doc, "created_by", None)
+    recipients = _iter_recipients([target] if target else [])
 
+    subject = f"[전자결재] 완료: {doc.title}"
+    body = f"문서가 완료되었습니다.\n\n제목: {doc.title}\n링크: {url}"
 
-def notify_on_approved(request, doc, user) -> None:
-    send_document_notification(
-        request=request,
-        doc=doc,
-        user=user,
-        subject="[전자결재] 결재가 승인되었습니다",
-        message=f"문서 '{_safe_title(doc)}'가 승인되었습니다.",
-    )
+    _toast(request, "success", f"문서가 완료되었습니다. ({doc.title})")
+    _send_email(subject, body, [r.email for r in recipients])
 
 
-def notify_on_rejected(request, doc, user, reason: str = "") -> None:
-    extra = f"\n반려 사유: {reason}" if reason else ""
-    send_document_notification(
-        request=request,
-        doc=doc,
-        user=user,
-        subject="[전자결재] 결재가 반려되었습니다",
-        message=f"문서 '{_safe_title(doc)}'가 반려되었습니다.{extra}",
-    )
-
-
-def notify_on_line_requested(request, doc, user, line=None) -> None:
+def notify_on_rejected(*, request=None, doc: Document, user, reason: str) -> None:
     """
-    결재 라인(승인자)에게 '승인 요청' 알림
-    line 인자가 있으면 몇 번째 라인인지 등 메시지에 넣을 수 있습니다.
+    반려 알림: 기본은 상신자에게.
     """
-    line_info = ""
-    if line is not None:
-        # line.order, line.step 같은게 있으면 자동 반영
-        order = getattr(line, "order", None) or getattr(line, "step", None)
-        if order is not None:
-            line_info = f" (결재라인 {order})"
+    url = _doc_url(doc, request=request)
+    reason = (reason or "").strip()
 
-    send_document_notification(
-        request=request,
-        doc=doc,
-        user=user,
-        subject="[전자결재] 결재 승인 요청",
-        message=f"문서 '{_safe_title(doc)}'{line_info} 승인 요청이 도착했습니다.",
-    )
+    recipients = _iter_recipients([user] if user else [])
+    subject = f"[전자결재] 반려: {doc.title}"
+    body = f"문서가 반려되었습니다.\n\n제목: {doc.title}\n사유: {reason}\n링크: {url}"
 
-
-def notify_on_line_approved(request, doc, line=None, actor=None, **kwargs) -> None:
-    """
-    결재라인 승인 알림.
-    - 어떤 호출 경로는 (request, doc, line, actor=...) 로 호출
-    - 어떤 호출 경로는 (request, doc, actor=...) 처럼 line 없이 호출
-    따라서 line을 optional로 둡니다.
-    """
-    # actor fallback
-    if actor is None:
-        actor = getattr(request, "user", None)
-
-    actor_name = ""
-    if actor:
-        actor_name = (actor.get_full_name() or "").strip() or getattr(actor, "username", "")
-
-    # line 정보가 없을 수도 있으니 안전 처리
-    order_txt = ""
-    if line is not None:
-        order = getattr(line, "order", None) or getattr(line, "step", None)
-        if order is not None:
-            order_txt = f" (라인 {order})"
-
-    send_document_notification(
-        request=request,
-        doc=doc,
-        user=actor or getattr(doc, "created_by", None),
-        subject="[전자결재] 결재 승인",
-        message=f"문서 '{_safe_title(doc)}'이(가) 승인되었습니다{order_txt}. 승인자: {actor_name}".strip(),
-    )
-
-
-def notify_on_line_rejected(request, doc, user, line=None, reason: str = "") -> None:
-    line_info = ""
-    if line is not None:
-        order = getattr(line, "order", None) or getattr(line, "step", None)
-        if order is not None:
-            line_info = f" (결재라인 {order})"
-
-    extra = f"\n반려 사유: {reason}" if reason else ""
-    send_document_notification(
-        request=request,
-        doc=doc,
-        user=user,
-        subject="[전자결재] 결재 라인 반려",
-        message=f"문서 '{_safe_title(doc)}'{line_info}이(가) 반려되었습니다.{extra}",
-    )
-
-def notify_on_submit(request, doc, user=None, line=None) -> None:
-    """
-    문서 '제출(상신)' 시 알림.
-    - services.py가 user를 안 넘겨도 동작하도록 user를 optional로 둡니다.
-    - user가 없으면 doc의 작성자 계열 필드에서 추론합니다.
-    """
-    # 1) user fallback
-    if user is None:
-        user = getattr(doc, "created_by", None) or getattr(doc, "owner", None) or getattr(doc, "user", None)
-
-    # user를 끝내 못 찾으면(모델 구조가 다른 경우) 조용히 종료하거나, 예외를 내도 됩니다.
-    if user is None:
-        return
-
-    line_info = ""
-    if line is not None:
-        order = getattr(line, "order", None) or getattr(line, "step", None)
-        if order is not None:
-            line_info = f" (결재라인 {order})"
-
-    send_document_notification(
-        request=request,
-        doc=doc,
-        user=user,
-        subject="[전자결재] 문서가 제출되었습니다",
-        message=f"문서 '{_safe_title(doc)}'{line_info}가 제출(상신)되었습니다.",
-    )
+    _toast(request, "error", f"문서가 반려되었습니다. ({doc.title})")
+    _send_email(subject, body, [r.email for r in recipients])

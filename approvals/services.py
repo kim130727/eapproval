@@ -18,6 +18,7 @@ def _active_roles():
 
 
 def _next_pending_line(doc: Document):
+    # 현재 order에서 처리할 pending 1건
     return doc.lines.filter(
         role__in=_active_roles(),
         order=doc.current_line_order,
@@ -74,12 +75,12 @@ def create_document_with_lines_and_files(
 
     doc.save(update_fields=["status"])
 
-    # ✅ 상신 알림(협의자+결재자)
-    notify_on_submit(doc=doc, request=request)
+    # ✅ 상신 알림(협의자+결재자): notify.py 시그니처에 맞춤
+    notify_on_submit(request=request, doc=doc, user=creator)
 
     # ✅ 결재자가 없어서 즉시 완료라면 완료 알림
     if doc.status == Document.Status.COMPLETED:
-        notify_on_completed(doc=doc, request=request)
+        notify_on_completed(request=request, doc=doc, user=creator)
 
     return doc
 
@@ -114,8 +115,8 @@ def approve_or_consult(
 
     doc.save(update_fields=["current_line_order", "status"])
 
-    # ✅ 다음 처리자 알림(또는 완료 알림)
-    notify_on_line_approved(doc=doc, actor=actor, request=request)
+    # ✅ 다음 처리자 알림(또는 완료 알림): notify.py 시그니처에 맞춤
+    notify_on_line_approved(request=request, doc=doc, user=actor)
 
     return doc
 
@@ -143,8 +144,13 @@ def reject(
     doc.status = Document.Status.REJECTED
     doc.save(update_fields=["status"])
 
-    # ✅ 반려 알림(상신자)
-    notify_on_rejected(doc=doc, actor=actor, comment=comment, request=request)
+    # ✅ 반려 알림(상신자): notify.py 시그니처에 맞춤
+    notify_on_rejected(
+        request=request,
+        doc=doc,
+        user=getattr(doc, "created_by", None),
+        reason=(comment or "")[:300],
+    )
 
     return doc
 
