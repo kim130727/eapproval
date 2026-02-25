@@ -8,6 +8,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.core.mail import send_mail
 from django.utils.html import strip_tags
+from django.urls import reverse
 
 from .models import Document, DocumentLine
 
@@ -42,25 +43,16 @@ def _iter_recipients(users: Iterable[object]) -> list[Recipient]:
 
 
 def _doc_url(doc: Document, request=None) -> str:
-    # 1) Document.get_absolute_url 있으면 사용
-    path = None
-    if hasattr(doc, "get_absolute_url"):
-        try:
-            path = doc.get_absolute_url()
-        except Exception:
-            path = None
-
-    # 2) 없으면 관례적 URL fallback
-    if not path:
-        path = f"/approvals/documents/{doc.pk}/"
+    # ✅ URLconf 기준으로 올바른 상세 URL 생성
+    path = reverse("approvals:doc_detail", kwargs={"doc_id": doc.pk})
 
     # request 있으면 절대 URL로
     if request:
-        try:
-            return request.build_absolute_uri(path)
-        except Exception:
-            return path
-    return path
+        return request.build_absolute_uri(path)
+
+    # request 없으면 settings의 SITE_BASE_URL 사용
+    base = getattr(settings, "SITE_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
+    return f"{base}{path}"
 
 
 def _toast(request, level: str, text: str) -> None:
