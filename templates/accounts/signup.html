@@ -6,17 +6,17 @@
 
   <!-- ✅ 헤더 아래 전체 폭 배너 -->
   <div style="width:100%; margin-bottom:24px; text-align:center;">
-  <img
-    src="{% static 'img/auth_top.png' %}"
-    alt="전자결재 배너"
-    style="
-      width:100%;
-      max-height:320px;
-      height:auto;
-      display:inline-block;
-      object-fit:contain;
-    "
-  />
+    <img
+      src="{% static 'img/auth_top.png' %}"
+      alt="전자결재 배너"
+      style="
+        width:100%;
+        max-height:320px;
+        height:auto;
+        display:inline-block;
+        object-fit:contain;
+      "
+    />
   </div>
 
   <!-- ✅ 회원가입 카드 -->
@@ -48,6 +48,18 @@
         {% if form.full_name.errors %}
           <div class="help" style="color:#dc2626;">
             {{ form.full_name.errors }}
+          </div>
+        {% endif %}
+      </div>
+
+      <!-- ✅ 이메일 입력 UI 추가 -->
+      <div class="field">
+        <label for="{{ form.email.id_for_label }}">이메일</label>
+        {{ form.email }}
+        <div class="help">알림 메일 수신에 사용됩니다. (선택)</div>
+        {% if form.email.errors %}
+          <div class="help" style="color:#dc2626;">
+            {{ form.email.errors }}
           </div>
         {% endif %}
       </div>

@@ -21,8 +21,10 @@ class ProfileAdmin(admin.ModelAdmin):
 class UserWithProfileAdminForm(forms.ModelForm):
     """
     ✅ User 변경 화면에서 Profile.full_name만 User 필드처럼 보여주기
+    ✅ email은 User 기본 필드로 그대로 저장
     - role은 '그룹 기준' 단일화로 인해 직접 수정하지 않음(자동 동기화)
     """
+
     full_name = forms.CharField(label="이름", required=False, max_length=150)
 
     class Meta:
@@ -62,11 +64,11 @@ except admin.sites.NotRegistered:
 @admin.register(User)
 class CustomUserAdmin(DjangoUserAdmin):
     form = UserWithProfileAdminForm
-
     inlines = ()
 
-    list_display = ("username", "first_name", "is_staff", "is_superuser")
+    list_display = ("username", "first_name", "email", "is_staff", "is_superuser")
     list_filter = ("is_staff", "is_superuser", "is_active", "groups")
+    search_fields = ("username", "first_name", "email", "profile__full_name")
 
     fieldsets = (
         (None, {"fields": ("username", "password")}),

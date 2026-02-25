@@ -9,12 +9,17 @@ from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.encoding import smart_str
 
-from accounts.utils import sync_profile_role_from_groups  # ✅ 추가
+from accounts.utils import sync_profile_role_from_groups
 from .forms import DocumentForm
 from .models import Attachment, Document
 from .permissions import CHAIR_GROUP, can_view_document, is_chair
 from .selectors import inbox_pending, my_documents, received_docs
-from .services import approve_or_consult, create_document_with_lines_and_files, mark_read, reject
+from .services import (
+    approve_or_consult,
+    create_document_with_lines_and_files,
+    mark_read,
+    reject,
+)
 
 User = get_user_model()
 
@@ -53,6 +58,7 @@ def doc_detail(request, doc_id: int):
     if not can_view_document(request.user, doc):
         raise Http404
 
+    # 완료 문서는 상세 들어올 때 수신/열람 처리(기존 로직 유지)
     if doc.status == Document.Status.COMPLETED:
         mark_read(doc=doc, actor=request.user)
 
@@ -79,6 +85,7 @@ def doc_create(request):
                 approvers=list(form.cleaned_data["approvers"]),
                 receivers=form.cleaned_data["receivers"],
                 files=form.cleaned_data["files"],
+                request=request,  # ✅ 이메일에 들어갈 절대 URL 생성용
             )
             messages.success(request, "상신되었습니다.")
             return redirect("approvals:doc_detail", doc_id=doc.id)
@@ -96,7 +103,12 @@ def act_approve(request, doc_id: int):
 
     comment = request.POST.get("comment", "")
     try:
-        approve_or_consult(doc=doc, actor=request.user, comment=comment)
+        approve_or_consult(
+            doc=doc,
+            actor=request.user,
+            comment=comment,
+            request=request,  # ✅ 다음 처리자/완료 알림 이메일 URL
+        )
         messages.success(request, "승인(또는 협의 완료) 처리했습니다.")
     except PermissionError:
         messages.error(request, "권한이 없습니다.")
@@ -116,7 +128,12 @@ def act_reject(request, doc_id: int):
         return redirect("approvals:doc_detail", doc_id=doc.id)
 
     try:
-        reject(doc=doc, actor=request.user, comment=comment)
+        reject(
+            doc=doc,
+            actor=request.user,
+            comment=comment,
+            request=request,  # ✅ 반려 알림 이메일 URL
+        )
         messages.success(request, "반려 처리했습니다.")
     except PermissionError:
         messages.error(request, "권한이 없습니다.")
@@ -139,6 +156,7 @@ def admin_chair(request):
             return redirect("approvals:admin_chair")
 
         target = get_object_or_404(User, id=user_id)
+
         if action == "add":
             target.groups.add(chair_group)
             messages.success(request, f"{target.username} 님을 위원장으로 임명했습니다.")

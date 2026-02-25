@@ -11,17 +11,23 @@ User = get_user_model()
 
 class SignupForm(UserCreationForm):
     full_name = forms.CharField(label="이름", max_length=150)
+    email = forms.EmailField(label="이메일", required=False)
 
     class Meta(UserCreationForm.Meta):
         model = User
-        fields = ("username", "full_name", "password1", "password2")
+        fields = ("username", "full_name", "email", "password1", "password2")
 
     def save(self, commit=True):
-        user = super().save(commit=commit)
+        user = super().save(commit=False)
+
+        # ✅ User.email 저장
+        user.email = (self.cleaned_data.get("email") or "").strip()
 
         if commit:
+            user.save()
             Profile.objects.update_or_create(
                 user=user,
-                defaults={"full_name": self.cleaned_data.get("full_name", "").strip()},
+                defaults={"full_name": (self.cleaned_data.get("full_name") or "").strip()},
             )
+
         return user

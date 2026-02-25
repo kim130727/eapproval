@@ -1,4 +1,8 @@
+# config/settings.py
+import os
 from pathlib import Path
+from dotenv import load_dotenv
+load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -79,3 +83,22 @@ LOGIN_REDIRECT_URL = "approvals:home"
 LOGOUT_REDIRECT_URL = "accounts:login"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# ===============================
+# EMAIL SETTINGS (SMTP)
+# ===============================
+
+EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+
+EMAIL_HOST = "smtp.gmail.com"
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+
+# 🔒 환경변수에서 읽어오기 (중요)
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
+
+DEFAULT_FROM_EMAIL = f"새누리3교회 전자결재 <{EMAIL_HOST_USER}>"
+
+# 메일 링크 생성용 (request 없을 때 fallback)
+SITE_BASE_URL = os.getenv("SITE_BASE_URL", "http://127.0.0.1:8000")

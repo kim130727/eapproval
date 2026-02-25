@@ -1,7 +1,16 @@
+# approvals/services.py
+from __future__ import annotations
+
 from django.db import transaction
 from django.utils import timezone
 
 from .models import Attachment, Document, DocumentLine
+from .notify import (
+    notify_on_completed,
+    notify_on_line_approved,
+    notify_on_rejected,
+    notify_on_submit,
+)
 
 
 def _active_roles():
@@ -18,7 +27,15 @@ def _next_pending_line(doc: Document):
 
 @transaction.atomic
 def create_document_with_lines_and_files(
-    *, creator, title: str, content: str, consultants, approvers, receivers, files
+    *,
+    creator,
+    title: str,
+    content: str,
+    consultants,
+    approvers,
+    receivers,
+    files,
+    request=None,
 ) -> Document:
     doc = Document.objects.create(
         title=title,
@@ -30,15 +47,21 @@ def create_document_with_lines_and_files(
 
     order = 1
     for u in consultants:
-        DocumentLine.objects.create(document=doc, role=DocumentLine.Role.CONSULT, order=order, user=u)
+        DocumentLine.objects.create(
+            document=doc, role=DocumentLine.Role.CONSULT, order=order, user=u
+        )
         order += 1
 
     for u in approvers:
-        DocumentLine.objects.create(document=doc, role=DocumentLine.Role.APPROVE, order=order, user=u)
+        DocumentLine.objects.create(
+            document=doc, role=DocumentLine.Role.APPROVE, order=order, user=u
+        )
         order += 1
 
     for u in receivers:
-        DocumentLine.objects.create(document=doc, role=DocumentLine.Role.RECEIVE, order=order, user=u)
+        DocumentLine.objects.create(
+            document=doc, role=DocumentLine.Role.RECEIVE, order=order, user=u
+        )
         order += 1
 
     for f in files:
@@ -48,12 +71,27 @@ def create_document_with_lines_and_files(
         doc.status = Document.Status.IN_PROGRESS
     else:
         doc.status = Document.Status.COMPLETED
+
     doc.save(update_fields=["status"])
+
+    # ✅ 상신 알림(협의자+결재자)
+    notify_on_submit(doc=doc, request=request)
+
+    # ✅ 결재자가 없어서 즉시 완료라면 완료 알림
+    if doc.status == Document.Status.COMPLETED:
+        notify_on_completed(doc=doc, request=request)
+
     return doc
 
 
 @transaction.atomic
-def approve_or_consult(*, doc: Document, actor, comment: str = "") -> Document:
+def approve_or_consult(
+    *,
+    doc: Document,
+    actor,
+    comment: str = "",
+    request=None,
+) -> Document:
     line = _next_pending_line(doc)
     if not line:
         return doc
@@ -67,16 +105,29 @@ def approve_or_consult(*, doc: Document, actor, comment: str = "") -> Document:
     line.save(update_fields=["decision", "comment", "acted_at"])
 
     doc.current_line_order += 1
+
+    # 다음 라인이 없으면 완료
     if _next_pending_line(doc) is None:
         doc.status = Document.Status.COMPLETED
     else:
         doc.status = Document.Status.IN_PROGRESS
+
     doc.save(update_fields=["current_line_order", "status"])
+
+    # ✅ 다음 처리자 알림(또는 완료 알림)
+    notify_on_line_approved(doc=doc, actor=actor, request=request)
+
     return doc
 
 
 @transaction.atomic
-def reject(*, doc: Document, actor, comment: str) -> Document:
+def reject(
+    *,
+    doc: Document,
+    actor,
+    comment: str,
+    request=None,
+) -> Document:
     line = _next_pending_line(doc)
     if not line:
         return doc
@@ -91,12 +142,19 @@ def reject(*, doc: Document, actor, comment: str) -> Document:
 
     doc.status = Document.Status.REJECTED
     doc.save(update_fields=["status"])
+
+    # ✅ 반려 알림(상신자)
+    notify_on_rejected(doc=doc, actor=actor, comment=comment, request=request)
+
     return doc
 
 
 @transaction.atomic
 def mark_read(*, doc: Document, actor) -> Document:
-    line = doc.lines.filter(role=DocumentLine.Role.RECEIVE, user_id=actor.id).first()
+    line = doc.lines.filter(
+        role=DocumentLine.Role.RECEIVE,
+        user_id=actor.id,
+    ).first()
     if not line:
         return doc
 
@@ -104,4 +162,5 @@ def mark_read(*, doc: Document, actor) -> Document:
         line.decision = DocumentLine.Decision.READ
         line.acted_at = timezone.now()
         line.save(update_fields=["decision", "acted_at"])
+
     return doc
