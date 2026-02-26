@@ -5,6 +5,9 @@ build/
 dist/
 wheels/
 *.egg-info
+.vscode
+db.sqlite3
+*.pyc
 
 # Virtual environments
 .venv
