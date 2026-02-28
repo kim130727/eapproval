@@ -13,7 +13,7 @@ from accounts.utils import sync_profile_role_from_groups
 from .forms import DocumentForm
 from .models import Attachment, Document
 from .permissions import CHAIR_GROUP, can_view_document, is_chair
-from .selectors import inbox_pending, my_documents, received_docs
+from .selectors import inbox_pending, my_documents, received_docs, completed_docs, rejected_docs
 from .services import (
     approve_or_consult,
     create_document_with_lines_and_files,
@@ -187,3 +187,14 @@ def attachment_download(request, attachment_id: int):
     file_handle = att.file.open("rb")
     filename = os.path.basename(att.file.name)
     return FileResponse(file_handle, as_attachment=True, filename=smart_str(filename))
+
+@login_required
+def completed_list(request):
+    docs = completed_docs(request.user)
+    return render(request, "approvals/doc_list.html", {"title": "완료함", "docs": docs})
+
+
+@login_required
+def rejected_list(request):
+    docs = rejected_docs(request.user)
+    return render(request, "approvals/doc_list.html", {"title": "반려함", "docs": docs})

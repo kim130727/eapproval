@@ -12,6 +12,10 @@ urlpatterns = [
     # ✅ 수신/열람함 name 기준 확정: "received"
     path("approvals/received/", views.received_list, name="received"),
 
+    # ✅ 추가 완료함 반려함
+    path("approvals/completed/", views.completed_list, name="completed"),
+    path("approvals/rejected/", views.rejected_list, name="rejected"),
+
     path("approvals/new/", views.doc_create, name="doc_create"),
 
     # ✅ 기존 상세

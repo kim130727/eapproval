@@ -299,15 +299,19 @@
         <!-- ✅ received 링크 통일: approvals:received -->
         <a class="btn" href="{% url 'approvals:received' %}">수신함</a>
 
+        <!-- ✅ 추가: 완료함 / 반려함 -->
+        <a class="btn" href="{% url 'approvals:completed' %}">완료함</a>
+        <a class="btn" href="{% url 'approvals:rejected' %}">반려함</a>
+
         <a class="btn btn-primary" href="{% url 'approvals:doc_create' %}">문서 상신</a>
 
         <span class="spacer"></span>
 
         {% if user.is_authenticated %}
           <div class="profile-wrap">
-  <span class="muted">안녕하세요, <strong>{{ user.username }}</strong>님</span>
+        <span class="muted">안녕하세요, <strong>{{ user.username }}</strong>님</span>
 
-  <!-- ✅ 프로필 아이콘 버튼 -->
+        <!-- ✅ 프로필 아이콘 버튼 -->
   <button type="button" class="profile-btn" id="profileBtn" aria-haspopup="true" aria-expanded="false">
     <span class="profile-avatar">
       {{ user.profile.display_name|default:user.username|slice:":1" }}
