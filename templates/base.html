@@ -207,6 +207,75 @@
       color:#374151;
     }
   }
+
+  /* ==========================
+   ✅ Dashboard (Mobile polish)
+   ========================== */
+
+  /* 데스크탑: 3칸 유지 */
+  .dash-grid{
+    display:grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap:12px;
+  }
+
+  .dash-card{
+    background:#fff;
+    border:1px solid #e5e7eb;
+    border-radius:14px;
+    padding:16px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+  }
+
+  .dash-label{
+    color:#6b7280;
+    font-size:13px;
+    font-weight:600;
+  }
+
+  .dash-num{
+    font-size:30px;
+    font-weight:900;
+    line-height:1;
+  }
+
+  .dash-btn{
+    width:100%;
+    text-align:center;
+    margin-top:auto; /* 버튼을 카드 하단으로 */
+  }
+
+  .dash-create-btn{
+    width:100%;
+    text-align:center;
+  }
+
+  /* 모바일: 1열 + 가운데 정렬 + 터치 친화 */
+  @media (max-width: 768px){
+    .wrap{ padding:14px; }         /* 모바일 여백 조금 줄이기 */
+    .dash-grid{
+      grid-template-columns: 1fr;  /* 1열 */
+      gap:10px;
+    }
+    .dash-card{
+      padding:14px;
+      align-items:center;          /* 카드 내부 가운데 정렬 */
+      text-align:center;
+    }
+    .dash-label{
+      font-size:13px;
+    }
+    .dash-num{
+      font-size:34px;              /* 숫자 강조 */
+    }
+    .dash-btn, .dash-create-btn{
+      padding:12px 12px;           /* 터치 영역 확대 */
+      border-radius:12px;
+    }
+  }
   </style>
 </head>
 
