@@ -40,18 +40,18 @@
         <div class="field">
           <label for="{{ form.approvers.id_for_label }}">결재자(순서대로)</label>
 
-          <!-- ✅ 드래그 가능 리스트 래퍼 -->
+          <!-- ✅ 드래그 정렬 리스트 래퍼 -->
           <div class="pickbox" id="approversBox" data-sortable="approvers">
             {{ form.approvers }}
           </div>
 
           <div class="help">{{ form.approvers.help_text }}</div>
           <div class="help" style="margin-top:6px;">
-            ✅ <strong>체크 후 ↕️ 드래그로 순서를 바꾸면 결재 순서</strong>로 저장됩니다.
+            ✅ <strong>체크 후 ↕️ 핸들을 드래그하면 결재 순서</strong>로 저장됩니다.
           </div>
           {% if form.approvers.errors %}<div class="help" style="color:#dc2626;">{{ form.approvers.errors }}</div>{% endif %}
 
-          <!-- ✅ 서버로 순서 전달하는 Hidden Input (반드시 렌더링) -->
+          <!-- ✅ 서버로 순서 전달 Hidden Input -->
           {{ form.approvers_order }}
         </div>
       </div>
@@ -83,7 +83,7 @@
   </div>
 
   <style>
-    /* ===== 공통: 박스/주변 텍스트 드래그 선택 방지 ===== */
+    /* ===== 공통: 드래그/터치 중 텍스트 선택 방지 ===== */
     .pickbox, .pickbox *{
       user-select: none;
       -webkit-user-select: none;
@@ -127,40 +127,43 @@
       background:#eff6ff;
     }
 
-    /* ===== 결재자(approvers)만: 드래그 UX를 위해 1열 리스트 + 핸들 ===== */
+    /* ===== 결재자(approvers)만: 1열 리스트 ===== */
     #approversBox ul{
       display:flex;
       flex-direction:column;
       gap:8px;
     }
 
-    #approversBox label{
-      cursor:grab; /* 카드 자체 드래그 */
-    }
-
-    /* 핸들(↕️) 표시 */
-    #approversBox label::before{
-      content:"↕️";
+    /* ✅ 실제 드래그 핸들(마우스/터치 공통) */
+    .drag-handle{
       display:inline-flex;
       align-items:center;
       justify-content:center;
-      width:26px;
-      height:26px;
+      width:28px;
+      height:28px;
       border:1px solid #e5e7eb;
       border-radius:10px;
       background:#f9fafb;
       flex:0 0 auto;
+      cursor:grab;
+
+      /* ⭐ 모바일 터치 드래그 핵심 */
+      touch-action: none;
+    }
+    .drag-handle:active{ cursor:grabbing; }
+
+    /* 드래그 중 효과 */
+    #approversBox li.dragging{
+      opacity:0.85;
+      transform: scale(1.01);
     }
 
-    #approversBox li.dragging label{
-      opacity:0.6;
-      cursor:grabbing;
-    }
-
-    #approversBox li.drag-over{
-      outline:2px dashed rgba(37,99,235,0.35);
-      outline-offset:2px;
+    /* 끼워넣기 표시 */
+    #approversBox li.placeholder{
+      border:2px dashed rgba(37,99,235,0.35);
       border-radius:12px;
+      height:52px;
+      background: rgba(37,99,235,0.03);
     }
   </style>
 
@@ -172,16 +175,6 @@
         const label = cb.closest("label");
         if (!label) return;
         label.classList.toggle("is-checked", cb.checked);
-      });
-    }
-
-    // ✅ 카드/라벨 드래그 시 파랗게 텍스트 선택되는 현상 방지
-    function preventTextSelection(box) {
-      box.addEventListener("mousedown", (e) => {
-        const label = e.target.closest("label");
-        if (!label) return;
-        if (e.target && e.target.tagName === "INPUT") return; // 체크박스 클릭은 허용
-        e.preventDefault();
       });
     }
 
@@ -199,12 +192,16 @@
     function setupSimpleBox(boxId) {
       const box = document.getElementById(boxId);
       if (!box) return;
-      preventTextSelection(box);
       syncCheckedClass(box);
       box.addEventListener("change", () => syncCheckedClass(box));
     }
 
-    function setupApproversDragSort(approversBoxId, hiddenId) {
+    /**
+     * ✅ Pointer Events 기반 정렬(모바일/PC 모두 동작)
+     * - ↕️ 핸들만 잡고 드래그
+     * - 체크박스 클릭은 그대로 유지
+     */
+    function setupApproversPointerSort(approversBoxId, hiddenId) {
       const box = document.getElementById(approversBoxId);
       const hidden = document.getElementById(hiddenId);
       if (!box || !hidden) return;
@@ -212,76 +209,106 @@
       const ul = box.querySelector("ul");
       if (!ul) return;
 
-      preventTextSelection(box);
-      syncCheckedClass(box);
+      // (1) label 앞에 실제 handle span을 삽입 (pseudo-element 제거)
+      ul.querySelectorAll("li").forEach(li => {
+        const label = li.querySelector("label");
+        if (!label) return;
 
-      // ✅ 초기 hidden 값: 체크된 항목을 현재 DOM 순서대로
-      hidden.value = getCheckedIdsInDomOrder(box).join(",");
+        if (label.querySelector(".drag-handle")) return;
 
-      // ✅ 체크 변경 시: DOM 순서 기준으로 다시 저장
-      box.addEventListener("change", function (e) {
-        const cb = e.target;
-        if (!cb || cb.type !== "checkbox") return;
-        syncCheckedClass(box);
-        hidden.value = getCheckedIdsInDomOrder(box).join(",");
+        const handle = document.createElement("span");
+        handle.className = "drag-handle";
+        handle.textContent = "↕️";
+        label.insertBefore(handle, label.firstChild);
       });
 
-      // ====== Drag & Drop (HTML5 Drag API) ======
+      syncCheckedClass(box);
+
+      // ✅ 초기 hidden 값
+      hidden.value = getCheckedIdsInDomOrder(box).join(",");
+
+      // ✅ 체크 변경 시 hidden 업데이트
+      box.addEventListener("change", function (e) {
+        const t = e.target;
+        if (t && t.type === "checkbox") {
+          syncCheckedClass(box);
+          hidden.value = getCheckedIdsInDomOrder(box).join(",");
+        }
+      });
+
       let draggingLi = null;
+      let placeholder = null;
 
-      function wireDraggable() {
-        ul.querySelectorAll("li").forEach(li => {
-          li.setAttribute("draggable", "true");
-
-          li.addEventListener("dragstart", (e) => {
-            draggingLi = li;
-            li.classList.add("dragging");
-            e.dataTransfer.setData("text/plain", "drag"); // Firefox 호환
-            e.dataTransfer.effectAllowed = "move";
-          });
-
-          li.addEventListener("dragend", () => {
-            li.classList.remove("dragging");
-            ul.querySelectorAll("li").forEach(x => x.classList.remove("drag-over"));
-            draggingLi = null;
-
-            // ✅ 드래그 종료 후: 체크된 항목 순서를 DOM 기준으로 저장
-            hidden.value = getCheckedIdsInDomOrder(box).join(",");
-          });
-
-          li.addEventListener("dragover", (e) => {
-            e.preventDefault();
-            if (!draggingLi || draggingLi === li) return;
-
-            li.classList.add("drag-over");
-
-            const rect = li.getBoundingClientRect();
-            const offset = e.clientY - rect.top;
-            const shouldInsertBefore = offset < rect.height / 2;
-
-            if (shouldInsertBefore) {
-              if (li.previousElementSibling !== draggingLi) {
-                ul.insertBefore(draggingLi, li);
-              }
-            } else {
-              if (li.nextElementSibling !== draggingLi) {
-                ul.insertBefore(draggingLi, li.nextElementSibling);
-              }
-            }
-          });
-
-          li.addEventListener("dragleave", () => {
-            li.classList.remove("drag-over");
-          });
-
-          li.addEventListener("drop", (e) => {
-            e.preventDefault();
-            li.classList.remove("drag-over");
-          });
-        });
+      function makePlaceholder(heightPx) {
+        const ph = document.createElement("li");
+        ph.className = "placeholder";
+        ph.style.height = heightPx + "px";
+        return ph;
       }
 
-      wireDraggable();
+      function getLiUnderPointer(clientY) {
+        const lis = Array.from(ul.querySelectorAll("li")).filter(li => li !== draggingLi && li !== placeholder);
+        for (const li of lis) {
+          const rect = li.getBoundingClientRect();
+          const mid = rect.top + rect.height / 2;
+          if (clientY < mid) return li;
+        }
+        return null; // 맨 뒤
+      }
+
+      function onPointerMove(e) {
+        if (!draggingLi || !placeholder) return;
+
+        const targetLi = getLiUnderPointer(e.clientY);
+        if (targetLi) {
+          ul.insertBefore(placeholder, targetLi);
+        } else {
+          ul.appendChild(placeholder);
+        }
+      }
+
+      function endDrag() {
+        if (!draggingLi || !placeholder) return;
+
+        draggingLi.classList.remove("dragging");
+        ul.insertBefore(draggingLi, placeholder);
+        placeholder.remove();
+
+        draggingLi = null;
+        placeholder = null;
+
+        // ✅ 드래그 종료 후 hidden 업데이트
+        hidden.value = getCheckedIdsInDomOrder(box).join(",");
+      }
+
+      // (2) 핸들에 pointerdown 바인딩
+      ul.querySelectorAll(".drag-handle").forEach(handle => {
+        handle.addEventListener("pointerdown", function (e) {
+          const li = e.target.closest("li");
+          if (!li) return;
+
+          draggingLi = li;
+          draggingLi.classList.add("dragging");
+
+          const rect = li.getBoundingClientRect();
+          placeholder = makePlaceholder(rect.height);
+
+          ul.insertBefore(placeholder, draggingLi.nextSibling);
+
+          // pointer capture (모바일/PC 안정성)
+          handle.setPointerCapture(e.pointerId);
+
+          // 스크롤/선택 방지
+          e.preventDefault();
+
+          document.addEventListener("pointermove", onPointerMove, { passive: false });
+
+          document.addEventListener("pointerup", function _up() {
+            document.removeEventListener("pointermove", onPointerMove);
+            endDrag();
+          }, { once: true });
+        });
+      });
 
       // ✅ 제출 직전 최종 동기화
       const form = box.closest("form");
@@ -296,28 +323,28 @@
     setupSimpleBox("consultantsBox");
     setupSimpleBox("receiversBox");
 
-    // ✅ 결재자: 드래그 정렬 + hidden 저장
-    setupApproversDragSort("approversBox", "id_approvers_order");
+    // ✅ 결재자: 마우스/터치 드래그 정렬 + hidden 저장
+    setupApproversPointerSort("approversBox", "id_approvers_order");
 
     // ✅ 상신 버튼 연타 방지 + 로딩 표시
-      const formEl = document.querySelector("form[enctype='multipart/form-data']");
-      const btn = document.getElementById("submitBtn");
-      const txt = document.getElementById("submitText");
-      const sp = document.getElementById("submitSpinner");
+    const formEl = document.querySelector("form[enctype='multipart/form-data']");
+    const btn = document.getElementById("submitBtn");
+    const txt = document.getElementById("submitText");
+    const sp = document.getElementById("submitSpinner");
 
-      if (formEl && btn) {
-        let submitting = false;
-        formEl.addEventListener("submit", function () {
-          if (submitting) return false;
-          submitting = true;
+    if (formEl && btn) {
+      let submitting = false;
+      formEl.addEventListener("submit", function () {
+        if (submitting) return false;
+        submitting = true;
 
-          btn.disabled = true;
-          btn.style.opacity = "0.7";
-          btn.style.cursor = "not-allowed";
-          if (txt) txt.textContent = "상신 중...";
-          if (sp) sp.style.display = "inline";
-        });
-      }
+        btn.disabled = true;
+        btn.style.opacity = "0.7";
+        btn.style.cursor = "not-allowed";
+        if (txt) txt.textContent = "상신 중...";
+        if (sp) sp.style.display = "inline";
+      });
+    }
   });
   </script>
 {% endblock %}
