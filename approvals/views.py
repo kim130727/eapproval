@@ -95,6 +95,13 @@ def doc_create(request):
     if request.method == "POST":
         form = DocumentForm(request.POST, request.FILES)
         if form.is_valid():
+            token = (form.cleaned_data.get("submit_token") or "").strip()
+            processed = request.session.get("processed_submit_tokens", {})
+
+            # ✅ 이미 처리된 토큰이면: 같은 결과로 돌려보내기(중복 생성 방지)
+            if token and token in processed:
+                return redirect("approvals:doc_detail", doc_id=processed[token])
+
             # ✅ 협의자/수신자는 선택 안 해도 됨(빈값 안전 보정)
             consultants = form.cleaned_data.get("consultants") or []
             receivers = form.cleaned_data.get("receivers") or []
@@ -109,6 +116,15 @@ def doc_create(request):
                 files=form.cleaned_data["files"],
                 request=request,  # ✅ 이메일에 들어갈 절대 URL 생성용
             )
+
+            # ✅ 토큰 기록(세션)
+            if token:
+                processed[token] = doc.id
+                # 너무 커지지 않도록 최근 30개만 유지
+                if len(processed) > 30:
+                    processed = dict(list(processed.items())[-30:])
+                request.session["processed_submit_tokens"] = processed
+                
             messages.success(request, "상신되었습니다.")
             return redirect("approvals:doc_detail", doc_id=doc.id)
     else:

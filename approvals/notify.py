@@ -1,4 +1,5 @@
 # approvals/notify.py
+import threading
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -74,17 +75,19 @@ def _send_email(subject: str, body: str, to_emails: list[str]) -> None:
     if not from_email:
         # 메일 설정이 없으면 조용히 skip
         return
-    try:
-        send_mail(
-            subject=subject,
-            message=strip_tags(body),
-            from_email=from_email,
-            recipient_list=to_emails,
-            fail_silently=True,
-        )
-    except Exception:
-        # 알림 실패가 결재 흐름을 깨면 안됨
-        pass
+    def _do_send():
+        try:
+            send_mail(
+                subject=subject,
+                message=strip_tags(body),
+                from_email=from_email,
+                recipient_list=to_emails,
+                fail_silently=True,
+            )
+        except Exception:
+            pass
+    # ✅ 메일 전송을 백그라운드 스레드로(응답 지연 최소화)
+    threading.Thread(target=_do_send, daemon=True).start()
 
 
 def _active_roles():

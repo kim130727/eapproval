@@ -7,6 +7,7 @@
 
     <form method="post" enctype="multipart/form-data">
       {% csrf_token %}
+      {{ form.submit_token }}
 
       {% if form.non_field_errors %}
         <div class="msg error">
@@ -72,7 +73,10 @@
       </div>
 
       <div class="row" style="margin-top:14px;">
-        <button class="btn btn-primary" type="submit">상신하기</button>
+        <button class="btn btn-primary" id="submitBtn" type="submit">
+          <span id="submitText">상신하기</span>
+          <span id="submitSpinner" style="display:none; margin-left:8px;">⏳</span>
+        </button>
         <a class="btn" href="{% url 'approvals:home' %}">취소</a>
       </div>
     </form>
@@ -294,6 +298,26 @@
 
     // ✅ 결재자: 드래그 정렬 + hidden 저장
     setupApproversDragSort("approversBox", "id_approvers_order");
+
+    // ✅ 상신 버튼 연타 방지 + 로딩 표시
+      const formEl = document.querySelector("form[enctype='multipart/form-data']");
+      const btn = document.getElementById("submitBtn");
+      const txt = document.getElementById("submitText");
+      const sp = document.getElementById("submitSpinner");
+
+      if (formEl && btn) {
+        let submitting = false;
+        formEl.addEventListener("submit", function () {
+          if (submitting) return false;
+          submitting = true;
+
+          btn.disabled = true;
+          btn.style.opacity = "0.7";
+          btn.style.cursor = "not-allowed";
+          if (txt) txt.textContent = "상신 중...";
+          if (sp) sp.style.display = "inline";
+        });
+      }
   });
   </script>
 {% endblock %}

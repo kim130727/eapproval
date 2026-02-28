@@ -1,4 +1,5 @@
 # approvals/forms.py
+import uuid
 from django import forms
 from django.contrib.auth import get_user_model
 
@@ -45,6 +46,9 @@ class MultipleFileField(forms.FileField):
 
 
 class DocumentForm(forms.ModelForm):
+    # ✅ 중복 제출 방지 토큰
+    submit_token = forms.CharField(required=False, widget=forms.HiddenInput)
+
     consultants = forms.ModelMultipleChoiceField(
         queryset=User.objects.none(),
         required=False,  # ✅ 협의자: 선택
@@ -79,6 +83,10 @@ class DocumentForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+        # ✅ 폼이 렌더링될 때 기본 토큰 생성(없을 때만)
+        if not self.initial.get("submit_token"):
+            self.initial["submit_token"] = uuid.uuid4().hex
 
         chair_qs = chair_users_queryset()
         for fname in ("consultants", "approvers", "receivers"):
