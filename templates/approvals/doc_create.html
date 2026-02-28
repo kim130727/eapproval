@@ -29,17 +29,24 @@
       <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 12px;">
         <div class="field">
           <label for="{{ form.consultants.id_for_label }}">협의자</label>
-          {{ form.consultants }}
+          <div class="pickbox" id="consultantsBox">
+            {{ form.consultants }}
+          </div>
           <div class="help">필요 시 여러 명 선택</div>
           {% if form.consultants.errors %}<div class="help" style="color:#dc2626;">{{ form.consultants.errors }}</div>{% endif %}
         </div>
 
         <div class="field">
           <label for="{{ form.approvers.id_for_label }}">결재자(순서대로)</label>
-          {{ form.approvers }}
+
+          <!-- ✅ 드래그 가능 리스트 래퍼 -->
+          <div class="pickbox" id="approversBox" data-sortable="approvers">
+            {{ form.approvers }}
+          </div>
+
           <div class="help">{{ form.approvers.help_text }}</div>
           <div class="help" style="margin-top:6px;">
-            ✅ <strong>선택한 순서가 그대로 결재 순서</strong>로 저장됩니다.
+            ✅ <strong>체크 후 ↕️ 드래그로 순서를 바꾸면 결재 순서</strong>로 저장됩니다.
           </div>
           {% if form.approvers.errors %}<div class="help" style="color:#dc2626;">{{ form.approvers.errors }}</div>{% endif %}
 
@@ -50,7 +57,9 @@
 
       <div class="field">
         <label for="{{ form.receivers.id_for_label }}">수신/열람자</label>
-        {{ form.receivers }}
+        <div class="pickbox" id="receiversBox">
+          {{ form.receivers }}
+        </div>
         <div class="help">완료 후 열람자(수신자) 목록</div>
         {% if form.receivers.errors %}<div class="help" style="color:#dc2626;">{{ form.receivers.errors }}</div>{% endif %}
       </div>
@@ -69,140 +78,222 @@
     </form>
   </div>
 
+  <style>
+    /* ===== 공통: 박스/주변 텍스트 드래그 선택 방지 ===== */
+    .pickbox, .pickbox *{
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    /* CheckboxSelectMultiple 기본 ul/li 공통 스타일 */
+    .pickbox ul{
+      list-style:none;
+      margin:0;
+      padding:0;
+      display:grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap:8px 12px;
+    }
+    @media (max-width: 860px){
+      .pickbox ul{ grid-template-columns: 1fr; }
+    }
+    .pickbox li{ margin:0; }
+
+    .pickbox label{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      padding:10px 12px;
+      border:1px solid #e5e7eb;
+      border-radius:12px;
+      background:#fff;
+      cursor:pointer;
+      line-height:1.2;
+    }
+
+    .pickbox input[type="checkbox"]{
+      width:18px;
+      height:18px;
+      margin:0;
+      flex:0 0 auto;
+    }
+
+    .pickbox label.is-checked{
+      border-color:#2563eb;
+      background:#eff6ff;
+    }
+
+    /* ===== 결재자(approvers)만: 드래그 UX를 위해 1열 리스트 + 핸들 ===== */
+    #approversBox ul{
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+    }
+
+    #approversBox label{
+      cursor:grab; /* 카드 자체 드래그 */
+    }
+
+    /* 핸들(↕️) 표시 */
+    #approversBox label::before{
+      content:"↕️";
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      width:26px;
+      height:26px;
+      border:1px solid #e5e7eb;
+      border-radius:10px;
+      background:#f9fafb;
+      flex:0 0 auto;
+    }
+
+    #approversBox li.dragging label{
+      opacity:0.6;
+      cursor:grabbing;
+    }
+
+    #approversBox li.drag-over{
+      outline:2px dashed rgba(37,99,235,0.35);
+      outline-offset:2px;
+      border-radius:12px;
+    }
+  </style>
+
   <script>
   document.addEventListener("DOMContentLoaded", function () {
 
-    // ===== 공통 유틸 =====
-    function getOptionFromPointer(sel, e) {
-      // 1) option이 target으로 잡히는 경우
-      if (e.target && typeof e.target.closest === "function") {
-        const opt = e.target.closest("option");
-        if (opt && opt.parentElement === sel) return opt;
-      }
-
-      // 2) 일부 환경 fallback: 좌표 기반 index 추정
-      const rect = sel.getBoundingClientRect();
-      const y = e.clientY - rect.top;
-
-      // 대략적인 줄 높이 (브라우저별 차이 있지만 토글 용도로 충분)
-      const approxLineHeight = 20;
-      const idx = Math.floor(y / approxLineHeight);
-
-      if (idx >= 0 && idx < sel.options.length) return sel.options[idx];
-      return null;
+    function syncCheckedClass(box) {
+      box.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+        const label = cb.closest("label");
+        if (!label) return;
+        label.classList.toggle("is-checked", cb.checked);
+      });
     }
 
-    // ===== 순서 저장 로직(결재자 전용) =====
-    function setupApproverOrder(selectId, hiddenId) {
-      const sel = document.getElementById(selectId);
-      const hidden = document.getElementById(hiddenId);
-      if (!sel || !hidden) return;
-      if (!sel.multiple) return;
-
-      // 클릭(토글) 순서대로 id 문자열을 저장
-      // 예: ["12","5","9"]
-      let order = [];
-
-      // ✅ 초기 로딩 시(수정폼/에러 리렌더 등) 이미 선택된 것 반영
-      // 기본 선택은 DOM 순서이므로, 초기에는 그 순서를 그대로 시작점으로 둡니다.
-      (function initFromSelected() {
-        const selected = Array.from(sel.options)
-          .filter(o => o.selected)
-          .map(o => String(o.value));
-        order = selected.slice();
-        hidden.value = order.join(",");
-      })();
-
-      function syncHidden() {
-        hidden.value = order.join(",");
-      }
-
-      function addToOrder(id) {
-        // 중복 제거 후 뒤에 붙여 "선택한 순서" 유지
-        order = order.filter(x => x !== id);
-        order.push(id);
-      }
-
-      function removeFromOrder(id) {
-        order = order.filter(x => x !== id);
-      }
-
-      // ✅ pointerdown에서 기본 다중선택 동작을 막고 토글 UX 제공
-      sel.addEventListener("pointerdown", function (e) {
-        const opt = getOptionFromPointer(sel, e);
-        if (!opt) return;
-
+    // ✅ 카드/라벨 드래그 시 파랗게 텍스트 선택되는 현상 방지
+    function preventTextSelection(box) {
+      box.addEventListener("mousedown", (e) => {
+        const label = e.target.closest("label");
+        if (!label) return;
+        if (e.target && e.target.tagName === "INPUT") return; // 체크박스 클릭은 허용
         e.preventDefault();
+      });
+    }
 
-        const id = String(opt.value);
-        const willSelect = !opt.selected;
+    // ✅ 현재 DOM 순서(위→아래) 기준으로 체크된 id만 뽑기
+    function getCheckedIdsInDomOrder(box) {
+      const ids = [];
+      const items = box.querySelectorAll("li");
+      items.forEach(li => {
+        const cb = li.querySelector('input[type="checkbox"]');
+        if (cb && cb.checked) ids.push(String(cb.value));
+      });
+      return ids;
+    }
 
-        opt.selected = willSelect;
+    function setupSimpleBox(boxId) {
+      const box = document.getElementById(boxId);
+      if (!box) return;
+      preventTextSelection(box);
+      syncCheckedClass(box);
+      box.addEventListener("change", () => syncCheckedClass(box));
+    }
 
-        if (willSelect) {
-          addToOrder(id);
-        } else {
-          removeFromOrder(id);
-        }
+    function setupApproversDragSort(approversBoxId, hiddenId) {
+      const box = document.getElementById(approversBoxId);
+      const hidden = document.getElementById(hiddenId);
+      if (!box || !hidden) return;
 
-        syncHidden();
+      const ul = box.querySelector("ul");
+      if (!ul) return;
 
-        // Django 폼 바인딩/검증용 change 이벤트
-        sel.dispatchEvent(new Event("change", { bubbles: true }));
+      preventTextSelection(box);
+      syncCheckedClass(box);
+
+      // ✅ 초기 hidden 값: 체크된 항목을 현재 DOM 순서대로
+      hidden.value = getCheckedIdsInDomOrder(box).join(",");
+
+      // ✅ 체크 변경 시: DOM 순서 기준으로 다시 저장
+      box.addEventListener("change", function (e) {
+        const cb = e.target;
+        if (!cb || cb.type !== "checkbox") return;
+        syncCheckedClass(box);
+        hidden.value = getCheckedIdsInDomOrder(box).join(",");
       });
 
-      // ✅ 키보드/기타 입력으로 선택이 변할 수 있으니 change에서도 안전하게 보정
-      sel.addEventListener("change", function () {
-        const selectedIds = new Set(
-          Array.from(sel.options).filter(o => o.selected).map(o => String(o.value))
-        );
+      // ====== Drag & Drop (HTML5 Drag API) ======
+      let draggingLi = null;
 
-        // order에서 선택 해제된 것은 제거
-        order = order.filter(id => selectedIds.has(id));
+      function wireDraggable() {
+        ul.querySelectorAll("li").forEach(li => {
+          li.setAttribute("draggable", "true");
 
-        // 새로 선택된 것이 있는데 order에 없으면 DOM 순서대로 뒤에 붙임(안전 fallback)
-        const newlySelected = Array.from(selectedIds).filter(id => !order.includes(id));
-        for (const id of newlySelected) order.push(id);
+          li.addEventListener("dragstart", (e) => {
+            draggingLi = li;
+            li.classList.add("dragging");
+            e.dataTransfer.setData("text/plain", "drag"); // Firefox 호환
+            e.dataTransfer.effectAllowed = "move";
+          });
 
-        syncHidden();
-      });
+          li.addEventListener("dragend", () => {
+            li.classList.remove("dragging");
+            ul.querySelectorAll("li").forEach(x => x.classList.remove("drag-over"));
+            draggingLi = null;
 
-      // ✅ 제출 직전에도 한번 동기화 (혹시모를 상황 대비)
-      const form = sel.closest("form");
+            // ✅ 드래그 종료 후: 체크된 항목 순서를 DOM 기준으로 저장
+            hidden.value = getCheckedIdsInDomOrder(box).join(",");
+          });
+
+          li.addEventListener("dragover", (e) => {
+            e.preventDefault();
+            if (!draggingLi || draggingLi === li) return;
+
+            li.classList.add("drag-over");
+
+            const rect = li.getBoundingClientRect();
+            const offset = e.clientY - rect.top;
+            const shouldInsertBefore = offset < rect.height / 2;
+
+            if (shouldInsertBefore) {
+              if (li.previousElementSibling !== draggingLi) {
+                ul.insertBefore(draggingLi, li);
+              }
+            } else {
+              if (li.nextElementSibling !== draggingLi) {
+                ul.insertBefore(draggingLi, li.nextElementSibling);
+              }
+            }
+          });
+
+          li.addEventListener("dragleave", () => {
+            li.classList.remove("drag-over");
+          });
+
+          li.addEventListener("drop", (e) => {
+            e.preventDefault();
+            li.classList.remove("drag-over");
+          });
+        });
+      }
+
+      wireDraggable();
+
+      // ✅ 제출 직전 최종 동기화
+      const form = box.closest("form");
       if (form) {
         form.addEventListener("submit", function () {
-          // 최종 검증: 현재 선택된 것만 남기기
-          const selectedIds = new Set(
-            Array.from(sel.options).filter(o => o.selected).map(o => String(o.value))
-          );
-          order = order.filter(id => selectedIds.has(id));
-          hidden.value = order.join(",");
+          hidden.value = getCheckedIdsInDomOrder(box).join(",");
         });
       }
     }
 
-    // ===== 토글만 적용(협의자/수신자) =====
-    function enableToggle(selectId) {
-      const sel = document.getElementById(selectId);
-      if (!sel) return;
-      if (!sel.multiple) return;
+    // ✅ 협의자/수신자: 체크 강조만
+    setupSimpleBox("consultantsBox");
+    setupSimpleBox("receiversBox");
 
-      sel.addEventListener("pointerdown", function (e) {
-        const opt = getOptionFromPointer(sel, e);
-        if (!opt) return;
-
-        e.preventDefault();
-        opt.selected = !opt.selected;
-        sel.dispatchEvent(new Event("change", { bubbles: true }));
-      });
-    }
-
-    // Django 기본 id 규칙: id_필드명 / hidden은 id_approvers_order
-    enableToggle("id_consultants");
-    enableToggle("id_receivers");
-
-    // ✅ 결재자: 토글 + 순서 저장
-    setupApproverOrder("id_approvers", "id_approvers_order");
+    // ✅ 결재자: 드래그 정렬 + hidden 저장
+    setupApproversDragSort("approversBox", "id_approvers_order");
   });
   </script>
 {% endblock %}

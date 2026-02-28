@@ -47,22 +47,24 @@ class MultipleFileField(forms.FileField):
 class DocumentForm(forms.ModelForm):
     consultants = forms.ModelMultipleChoiceField(
         queryset=User.objects.none(),
-        required=False,
-        widget=forms.SelectMultiple,
+        required=True,
+        widget=forms.CheckboxSelectMultiple,
         label="협의자(여러 명 가능)",
+        help_text="체크 후 ↕️ 드래그로 순서를 바꾸면 결재 순서로 저장됩니다.",
     )
     approvers = forms.ModelMultipleChoiceField(
         queryset=User.objects.none(),
         required=True,
-        widget=forms.SelectMultiple,
-        label="결재자(순서대로 선택)",
-        help_text="선택한 순서가 결재 순서입니다.",
-    )
+        widget=forms.CheckboxSelectMultiple,
+        label="결재자(드래그로 순서 변경 가능)",
+        help_text="체크 후 ↕️ 드래그로 순서를 바꾸면 결재 순서로 저장됩니다.",
+    )   
     receivers = forms.ModelMultipleChoiceField(
         queryset=User.objects.none(),
-        required=False,
-        widget=forms.SelectMultiple,
+        required=True,
+        widget=forms.CheckboxSelectMultiple,
         label="수신/열람자(여러 명 가능)",
+        help_text="체크 후 ↕️ 드래그로 순서를 바꾸면 결재 순서로 저장됩니다.",
     )
 
     # ✅ 선택 순서 저장용(프론트 JS가 콤마로 넣어줌)
