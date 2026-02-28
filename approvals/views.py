@@ -13,7 +13,13 @@ from accounts.utils import sync_profile_role_from_groups
 from .forms import DocumentForm
 from .models import Attachment, Document
 from .permissions import CHAIR_GROUP, can_view_document, is_chair
-from .selectors import inbox_pending, my_documents, received_docs, completed_docs, rejected_docs
+from .selectors import (
+    inbox_pending,
+    my_documents,
+    received_docs,
+    completed_docs,
+    rejected_docs,
+)
 from .services import (
     approve_or_consult,
     create_document_with_lines_and_files,
@@ -53,6 +59,18 @@ def received_list(request):
 
 
 @login_required
+def completed_list(request):
+    docs = completed_docs(request.user)
+    return render(request, "approvals/doc_list.html", {"title": "완료함", "docs": docs})
+
+
+@login_required
+def rejected_list(request):
+    docs = rejected_docs(request.user)
+    return render(request, "approvals/doc_list.html", {"title": "반려함", "docs": docs})
+
+
+@login_required
 def doc_detail(request, doc_id: int):
     doc = get_object_or_404(Document, id=doc_id)
     if not can_view_document(request.user, doc):
@@ -77,13 +95,17 @@ def doc_create(request):
     if request.method == "POST":
         form = DocumentForm(request.POST, request.FILES)
         if form.is_valid():
+            # ✅ 협의자/수신자는 선택 안 해도 됨(빈값 안전 보정)
+            consultants = form.cleaned_data.get("consultants") or []
+            receivers = form.cleaned_data.get("receivers") or []
+
             doc = create_document_with_lines_and_files(
                 creator=request.user,
                 title=form.cleaned_data["title"],
                 content=form.cleaned_data["content"],
-                consultants=form.cleaned_data["consultants"],
-                approvers=list(form.cleaned_data["approvers"]),
-                receivers=form.cleaned_data["receivers"],
+                consultants=consultants,
+                approvers=list(form.cleaned_data["approvers"]),  # ✅ 결재자는 필수
+                receivers=receivers,
                 files=form.cleaned_data["files"],
                 request=request,  # ✅ 이메일에 들어갈 절대 URL 생성용
             )
@@ -102,7 +124,19 @@ def act_approve(request, doc_id: int):
         return redirect("approvals:doc_detail", doc_id=doc.id)
 
     comment = request.POST.get("comment", "")
+
     try:
+        # ✅ 규칙: 협의자가 지정되어 있으면(= CONSULT 라인이 존재) 협의가 모두 끝나야 결재 승인 가능
+        # - 아래는 라인 모델에 role="CONSULT"/"APPROVE"가 있다는 전제의 "뷰 안전장치"입니다.
+        # - 실제 강제는 services.approve_or_consult 내부에서도 동일하게 막는 것을 권장합니다.
+        current_line = doc.lines.filter(order=doc.current_line_order, decision="PENDING").first()
+
+        if current_line and getattr(current_line, "role", None) == "APPROVE":
+            has_pending_consult = doc.lines.filter(role="CONSULT", decision="PENDING").exists()
+            if has_pending_consult:
+                messages.error(request, "협의가 완료되지 않아 결재할 수 없습니다. (협의자 처리 후 결재 가능합니다)")
+                return redirect("approvals:doc_detail", doc_id=doc.id)
+
         approve_or_consult(
             doc=doc,
             actor=request.user,
@@ -187,14 +221,3 @@ def attachment_download(request, attachment_id: int):
     file_handle = att.file.open("rb")
     filename = os.path.basename(att.file.name)
     return FileResponse(file_handle, as_attachment=True, filename=smart_str(filename))
-
-@login_required
-def completed_list(request):
-    docs = completed_docs(request.user)
-    return render(request, "approvals/doc_list.html", {"title": "완료함", "docs": docs})
-
-
-@login_required
-def rejected_list(request):
-    docs = rejected_docs(request.user)
-    return render(request, "approvals/doc_list.html", {"title": "반려함", "docs": docs})

@@ -47,21 +47,21 @@ class MultipleFileField(forms.FileField):
 class DocumentForm(forms.ModelForm):
     consultants = forms.ModelMultipleChoiceField(
         queryset=User.objects.none(),
-        required=True,
+        required=False,  # ✅ 협의자: 선택
         widget=forms.CheckboxSelectMultiple,
         label="협의자(여러 명 가능)",
         help_text="체크 후 ↕️ 드래그로 순서를 바꾸면 결재 순서로 저장됩니다.",
     )
     approvers = forms.ModelMultipleChoiceField(
         queryset=User.objects.none(),
-        required=True,
+        required=True,   # ✅ 결재자: 필수 (그대로)
         widget=forms.CheckboxSelectMultiple,
         label="결재자(드래그로 순서 변경 가능)",
         help_text="체크 후 ↕️ 드래그로 순서를 바꾸면 결재 순서로 저장됩니다.",
-    )   
+    )
     receivers = forms.ModelMultipleChoiceField(
         queryset=User.objects.none(),
-        required=True,
+        required=False,  # ✅ 수신/열람자: 선택
         widget=forms.CheckboxSelectMultiple,
         label="수신/열람자(여러 명 가능)",
         help_text="체크 후 ↕️ 드래그로 순서를 바꾸면 결재 순서로 저장됩니다.",
