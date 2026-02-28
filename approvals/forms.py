@@ -1,12 +1,17 @@
 # approvals/forms.py
 import uuid
+
 from django import forms
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
 
 from .models import Document
 from .permissions import CHAIR_GROUP  # 프로젝트 표준: "CHAIR"
 
 User = get_user_model()
+
+# ✅ 파일 1개당 2MB 제한
+MAX_FILE_SIZE = 2 * 1024 * 1024  # 2MB
 
 
 def user_label(u) -> str:
@@ -32,6 +37,11 @@ def chair_users_queryset():
 class MultipleFileInput(forms.ClearableFileInput):
     allow_multiple_selected = True
 
+    def __init__(self, attrs=None):
+        attrs = attrs or {}
+        attrs["multiple"] = True  # ✅ 스마트폰에서도 다중 선택 가능하도록 강제
+        super().__init__(attrs)
+
 
 class MultipleFileField(forms.FileField):
     widget = MultipleFileInput
@@ -39,10 +49,22 @@ class MultipleFileField(forms.FileField):
     def clean(self, data, initial=None):
         if not data:
             return []
+
         parent_clean = super().clean
-        if isinstance(data, (list, tuple)):
-            return [parent_clean(d, initial) for d in data]
-        return [parent_clean(data, initial)]
+        files = data if isinstance(data, (list, tuple)) else [data]
+
+        cleaned_files = []
+        for f in files:
+            f = parent_clean(f, initial)
+
+            # ✅ 파일 1개당 2MB 제한
+            if getattr(f, "size", 0) > MAX_FILE_SIZE:
+                size_mb = round(f.size / 1024 / 1024, 2)
+                raise ValidationError(f"[{f.name}] 파일이 2MB를 초과했습니다. (현재: {size_mb}MB)")
+
+            cleaned_files.append(f)
+
+        return cleaned_files
 
 
 class DocumentForm(forms.ModelForm):
@@ -58,7 +80,7 @@ class DocumentForm(forms.ModelForm):
     )
     approvers = forms.ModelMultipleChoiceField(
         queryset=User.objects.none(),
-        required=True,   # ✅ 결재자: 필수 (그대로)
+        required=True,  # ✅ 결재자: 필수 (그대로)
         widget=forms.CheckboxSelectMultiple,
         label="결재자(드래그로 순서 변경 가능)",
         help_text="체크 후 ↕️ 드래그로 순서를 바꾸면 결재 순서로 저장됩니다.",
@@ -74,6 +96,7 @@ class DocumentForm(forms.ModelForm):
     # ✅ 선택 순서 저장용(프론트 JS가 콤마로 넣어줌)
     approvers_order = forms.CharField(required=False, widget=forms.HiddenInput)
 
+    # ✅ 첨부파일(여러 개 가능 + 1개당 2MB 제한은 MultipleFileField.clean에서 처리)
     files = MultipleFileField(required=False, label="첨부파일(여러 개 가능)")
 
     class Meta:
