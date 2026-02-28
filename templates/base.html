@@ -60,7 +60,11 @@
     .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
     .field { margin: 10px 0; }
     label { display:block; font-weight:600; margin-bottom:6px; }
-    input[type="text"], input[type="password"], textarea, select {
+    input[type="text"],
+    input[type="password"],
+    input[type="email"],   /* ⭐ 이 줄 추가 */
+    textarea,
+    select {
       width: 100%; box-sizing:border-box; padding:10px 12px; border-radius:10px;
       border:1px solid #d1d5db; background:#fff;
     }
