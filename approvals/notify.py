@@ -1,15 +1,15 @@
 # approvals/notify.py
-import threading
 from __future__ import annotations
 
+import threading
 from dataclasses import dataclass
-from typing import Iterable, Optional
+from typing import Iterable
 
 from django.conf import settings
 from django.contrib import messages
 from django.core.mail import send_mail
-from django.utils.html import strip_tags
 from django.urls import reverse
+from django.utils.html import strip_tags
 
 from .models import Document, DocumentLine
 
@@ -32,8 +32,9 @@ def _iter_recipients(users: Iterable[object]) -> list[Recipient]:
         email = _get_user_email(u)
         if email:
             recips.append(Recipient(user=u, email=email))
+
     # 이메일 중복 제거
-    seen = set()
+    seen: set[str] = set()
     uniq: list[Recipient] = []
     for r in recips:
         if r.email in seen:
@@ -44,7 +45,7 @@ def _iter_recipients(users: Iterable[object]) -> list[Recipient]:
 
 
 def _doc_url(doc: Document, request=None) -> str:
-    # ✅ URLconf 기준으로 올바른 상세 URL 생성
+    # URLconf 기준으로 상세 URL 생성
     path = reverse("approvals:doc_detail", kwargs={"doc_id": doc.pk})
 
     # request 있으면 절대 URL로
@@ -71,11 +72,12 @@ def _toast(request, level: str, text: str) -> None:
 def _send_email(subject: str, body: str, to_emails: list[str]) -> None:
     if not to_emails:
         return
+
     from_email = getattr(settings, "DEFAULT_FROM_EMAIL", None)
     if not from_email:
-        # 메일 설정이 없으면 조용히 skip
         return
-    def _do_send():
+
+    def _job() -> None:
         try:
             send_mail(
                 subject=subject,
@@ -85,9 +87,11 @@ def _send_email(subject: str, body: str, to_emails: list[str]) -> None:
                 fail_silently=True,
             )
         except Exception:
+            # 알림 실패가 결재 플로우를 막지 않도록 무시
             pass
-    # ✅ 메일 전송을 백그라운드 스레드로(응답 지연 최소화)
-    threading.Thread(target=_do_send, daemon=True).start()
+
+    # 요청 응답을 막지 않도록 백그라운드로 발송
+    threading.Thread(target=_job, daemon=True).start()
 
 
 def _active_roles():
@@ -133,7 +137,11 @@ def notify_on_line_approved(*, request=None, doc: Document, user) -> None:
     url = _doc_url(doc, request=request)
     next_line = _current_pending_line(doc)
 
-    actor_name = getattr(user, "get_full_name", lambda: "")() or getattr(user, "username", "") or "처리자"
+    actor_name = (
+        getattr(user, "get_full_name", lambda: "")()  # type: ignore[misc]
+        or getattr(user, "username", "")
+        or "처리자"
+    )
 
     if next_line:
         recipients = _iter_recipients([next_line.user])
@@ -172,12 +180,14 @@ def notify_on_completed(*, request=None, doc: Document, user=None) -> None:
 
 def notify_on_rejected(*, request=None, doc: Document, user, reason: str) -> None:
     """
-    반려 알림: 기본은 상신자에게.
+    반려 알림: 기본은 상신자(created_by)에게.
     """
     url = _doc_url(doc, request=request)
     reason = (reason or "").strip()
 
-    recipients = _iter_recipients([user] if user else [])
+    creator = getattr(doc, "created_by", None)
+    recipients = _iter_recipients([creator] if creator else [])
+
     subject = f"[전자결재] 반려: {doc.title}"
     body = f"문서가 반려되었습니다.\n\n제목: {doc.title}\n사유: {reason}\n링크: {url}"
 
