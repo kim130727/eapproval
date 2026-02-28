@@ -14,16 +14,48 @@
     .card { background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:16px; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
     .grid { display:grid; gap:12px; }
     .grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-    @media (max-width: 860px){ .grid-3 { grid-template-columns: 1fr; } }
+    /* ✅ 모바일에서 패딩/글자 조금 줄여서 더 보기 좋게 */
+    @media (max-width: 640px) {
+      .table th, .table td {
+        padding: 8px 6px;
+        font-size: 13px;
+      }
+    }
     .btn { display:inline-block; padding:10px 12px; border-radius:10px; border:1px solid #d1d5db; background:#fff; text-decoration:none; color:#111; font-size:14px; }
     .btn-primary { background:#2563eb; border-color:#2563eb; color:#fff; }
     .btn-danger { background:#dc2626; border-color:#dc2626; color:#fff; }
     .btn + .btn { margin-left: 6px; }
     .muted { color:#6b7280; }
     .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
-    .table { width:100%; border-collapse: collapse; }
-    .table th, .table td { border-bottom:1px solid #eee; padding:10px 8px; text-align:left; vertical-align:top; }
-    .table th { background:#fafafa; font-weight:600; }
+    /* ✅ 테이블: 열 폭 고정 + 줄바꿈 방지 + 말줄임 */
+    .table {
+      table-layout: fixed;
+      width: 100%;
+    }
+    .table th, .table td {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      /* ⭐ 추가: 4열 전부 가운데 정렬 */
+      text-align: center;
+    }
+
+    /* 제목 열 내용(td)만 왼쪽 */
+    .table td:nth-child(2) {
+      text-align: left;
+    }
+
+    /* 제목 헤더(th)는 가운데 유지 */
+    .table th:nth-child(2) {
+      text-align: center;
+    }
+
+    /* ✅ 모바일에서 테이블 깨짐 방지: 가로 스크롤 허용 */
+    .table-wrap {
+      width: 100%;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
     .badge { display:inline-block; padding:4px 8px; border-radius:999px; font-size:12px; border:1px solid #e5e7eb; background:#f9fafb; }
     .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
     .field { margin: 10px 0; }
@@ -94,6 +126,87 @@
     .profile-value{ color:#111; font-size:13px; word-break:break-word; }
 
     .profile-actions{ margin-top:10px; display:flex; gap:8px; }
+
+    /* =======================================================
+   📱MOBILE CARD LAYOUT (doc list)
+    PC = 기존 테이블 유지
+    MOBILE = 카드형 자동 변환
+    ======================================================= */
+    @media (max-width: 768px){
+
+    /* 테이블 구조를 카드처럼 변환 */
+    .doc-table,
+    .doc-table thead,
+    .doc-table tbody,
+    .doc-table th,
+    .doc-table td,
+    .doc-table tr{
+      display:block;
+      width:100%;
+    }
+
+    /* 헤더 숨김 (모바일에서는 불필요) */
+    .doc-table thead{
+      display:none;
+    }
+
+    /* 카드 하나 */
+    .doc-table tr{
+      background:#fff;
+      border:1px solid #e5e7eb;
+      border-radius:14px;
+      padding:10px 12px;
+      margin-bottom:10px;
+      box-shadow:0 1px 3px rgba(0,0,0,0.04);
+    }
+
+    /* td 기본 리셋 */
+    .doc-table td{
+      border:none;
+      padding:4px 0;
+      text-align:left !important;
+      white-space:normal;
+    }
+
+    /* ===== 1줄: 상태 ===== */
+    .doc-table td:nth-child(1){
+      font-size:12px;
+      font-weight:600;
+      color:#2563eb;
+      margin-bottom:4px;
+    }
+
+    /* ===== 2줄: 제목 (가장 크게) ===== */
+    .doc-table td:nth-child(2){
+      font-size:15px;
+      font-weight:700;
+      margin-bottom:8px;
+      line-height:1.4;
+    }
+
+    /* ===== 3줄: 작성자 + 수정 (가로 정렬) ===== */
+    .doc-table td:nth-child(3),
+    .doc-table td:nth-child(4){
+      display:inline-block;
+      font-size:12px;
+      color:#6b7280;
+      margin-right:12px;
+    }
+
+    /* 작성자 앞 라벨 */
+    .doc-table td:nth-child(3)::before{
+      content:"작성자 ";
+      font-weight:600;
+      color:#374151;
+    }
+
+    /* 수정 앞 라벨 */
+    .doc-table td:nth-child(4)::before{
+      content:"수정 ";
+      font-weight:600;
+      color:#374151;
+    }
+  }
   </style>
 </head>
 

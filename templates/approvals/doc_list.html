@@ -8,14 +8,21 @@
       <a class="btn btn-primary" href="{% url 'approvals:doc_create' %}">문서 상신</a>
     </div>
 
-    <div style="margin-top:12px;">
-      <table class="table">
+    <div style="margin-top:12px;" class="table-wrap">
+      <table class="table doc-table">
+        <colgroup>
+          <col style="width:96px;">
+          <col style="width:auto;">
+          <col style="width:110px;">
+          <col style="width:140px;">
+        </colgroup>
+
         <thead>
           <tr>
-            <th style="width:120px;">상태</th>
+            <th>상태</th>
             <th>제목</th>
-            <th style="width:160px;">작성자</th>
-            <th style="width:160px;">수정</th>
+            <th>작성자</th>
+            <th>수정</th>
           </tr>
         </thead>
         <tbody>
@@ -23,7 +30,7 @@
           <tr>
             <td><span class="badge">{{ doc.get_status_display }}</span></td>
             <td>
-              <a href="{% url 'approvals:doc_detail' doc.id %}">
+              <a href="{% url 'approvals:doc_detail' doc.id %}" style="display:inline-block;">
                 {{ doc.title }}
               </a>
               <div class="muted" style="font-size:12px; margin-top:4px;">
