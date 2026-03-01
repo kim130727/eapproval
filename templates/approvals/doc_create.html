@@ -1,11 +1,15 @@
 {% extends "base.html" %}
+{% load static %}
 {% block title %}문서 상신 | 전자결재{% endblock %}
 
 {% block content %}
-  <div class="card" style="max-width:900px; margin: 0 auto;">
-    <h2 style="margin-top:0;">문서 상신</h2>
+  <!-- doc_create 전용 CSS/JS 로드 -->
+  <link rel="stylesheet" href="{% static 'css/doc_create.css' %}">
 
-    <form method="post" enctype="multipart/form-data">
+  <div class="card doc-create-card">
+    <h2 class="doc-create-title">문서 상신</h2>
+
+    <form method="post" enctype="multipart/form-data" class="doc-create-form">
       {% csrf_token %}
       {{ form.submit_token }}
 
@@ -18,23 +22,23 @@
       <div class="field">
         <label for="{{ form.title.id_for_label }}">제목</label>
         {{ form.title }}
-        {% if form.title.errors %}<div class="help" style="color:#dc2626;">{{ form.title.errors }}</div>{% endif %}
+        {% if form.title.errors %}<div class="help help-error">{{ form.title.errors }}</div>{% endif %}
       </div>
 
       <div class="field">
         <label for="{{ form.content.id_for_label }}">내용</label>
         {{ form.content }}
-        {% if form.content.errors %}<div class="help" style="color:#dc2626;">{{ form.content.errors }}</div>{% endif %}
+        {% if form.content.errors %}<div class="help help-error">{{ form.content.errors }}</div>{% endif %}
       </div>
 
-      <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 12px;">
+      <div class="grid doc-create-grid">
         <div class="field">
           <label for="{{ form.consultants.id_for_label }}">협의자</label>
           <div class="pickbox" id="consultantsBox">
             {{ form.consultants }}
           </div>
           <div class="help">필요 시 여러 명 선택</div>
-          {% if form.consultants.errors %}<div class="help" style="color:#dc2626;">{{ form.consultants.errors }}</div>{% endif %}
+          {% if form.consultants.errors %}<div class="help help-error">{{ form.consultants.errors }}</div>{% endif %}
         </div>
 
         <div class="field">
@@ -45,10 +49,10 @@
           </div>
 
           <div class="help">{{ form.approvers.help_text }}</div>
-          <div class="help" style="margin-top:6px;">
+          <div class="help help-strong">
             ✅ <strong>체크 후 ↕️ 핸들을 드래그하면 결재 순서</strong>로 저장됩니다.
           </div>
-          {% if form.approvers.errors %}<div class="help" style="color:#dc2626;">{{ form.approvers.errors }}</div>{% endif %}
+          {% if form.approvers.errors %}<div class="help help-error">{{ form.approvers.errors }}</div>{% endif %}
 
           <input type="hidden" name="approvers_order" id="id_approvers_order" value="">
         </div>
@@ -60,278 +64,25 @@
           {{ form.receivers }}
         </div>
         <div class="help">완료 후 열람자(수신자) 목록</div>
-        {% if form.receivers.errors %}<div class="help" style="color:#dc2626;">{{ form.receivers.errors }}</div>{% endif %}
+        {% if form.receivers.errors %}<div class="help help-error">{{ form.receivers.errors }}</div>{% endif %}
       </div>
 
       <div class="field">
         <label for="{{ form.files.id_for_label }}">첨부파일</label>
         {{ form.files }}
         <div class="help">여러 파일 선택 가능</div>
-        {% if form.files.errors %}<div class="help" style="color:#dc2626;">{{ form.files.errors }}</div>{% endif %}
+        {% if form.files.errors %}<div class="help help-error">{{ form.files.errors }}</div>{% endif %}
       </div>
 
-      <div class="row" style="margin-top:14px;">
+      <div class="row doc-create-actions">
         <button class="btn btn-primary" id="submitBtn" type="submit">
           <span id="submitText">상신하기</span>
-          <span id="submitSpinner" style="display:none; margin-left:8px;">⏳</span>
+          <span id="submitSpinner" class="submit-spinner">⏳</span>
         </button>
         <a class="btn" href="{% url 'approvals:home' %}">취소</a>
       </div>
     </form>
   </div>
 
-  <style>
-    /* ===== 공통 ===== */
-    .pickbox, .pickbox *{
-      user-select: none;
-      -webkit-user-select: none;
-    }
-
-    .pickbox ul{
-      list-style:none;
-      margin:0;
-      padding:0;
-      display:grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap:8px 12px;
-    }
-    @media (max-width: 860px){
-      .pickbox ul{ grid-template-columns: 1fr; }
-    }
-    .pickbox li{ margin:0; }
-
-    .pickbox label{
-      display:flex;
-      align-items:center;
-      gap:10px;
-      padding:10px 12px;
-      border:1px solid #e5e7eb;
-      border-radius:12px;
-      background:#fff;
-      cursor:pointer;
-      line-height:1.2;
-      flex:1;
-    }
-
-    .pickbox input[type="checkbox"]{
-      width:18px;
-      height:18px;
-      margin:0;
-      flex:0 0 auto;
-    }
-
-    .pickbox label.is-checked{
-      border-color:#2563eb;
-      background:#eff6ff;
-    }
-
-    /* ===== 결재자만: 1열 + 핸들(li 바깥) ===== */
-    #approversBox ul{
-      display:flex;
-      flex-direction:column;
-      gap:8px;
-    }
-
-    #approversBox li{
-      display:flex;
-      align-items:stretch;
-      gap:8px;
-    }
-
-    .drag-handle{
-      display:inline-flex;
-      align-items:center;
-      justify-content:center;
-      width:34px;
-      min-width:34px;
-      border:1px solid #e5e7eb;
-      border-radius:12px;
-      background:#f9fafb;
-      cursor:grab;
-
-      /* 모바일 터치 드래그 핵심 */
-      touch-action: none;
-    }
-    .drag-handle:active{ cursor:grabbing; }
-
-    #approversBox li.dragging{
-      opacity:0.85;
-      transform: scale(1.01);
-    }
-
-    #approversBox li.placeholder{
-      border:2px dashed rgba(37,99,235,0.35);
-      border-radius:12px;
-      height:52px;
-      background: rgba(37,99,235,0.03);
-    }
-  </style>
-
-  <script>
-  document.addEventListener("DOMContentLoaded", function () {
-
-    function syncCheckedClass(box) {
-      box.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-        const label = cb.closest("label");
-        if (!label) return;
-        label.classList.toggle("is-checked", cb.checked);
-      });
-    }
-
-    function getCheckedIdsInDomOrder(box) {
-      const ids = [];
-      const items = box.querySelectorAll("li");
-      items.forEach(li => {
-        const cb = li.querySelector('input[type="checkbox"]');
-        if (cb && cb.checked) ids.push(String(cb.value));
-      });
-      return ids;
-    }
-
-    function setupSimpleBox(boxId) {
-      const box = document.getElementById(boxId);
-      if (!box) return;
-      syncCheckedClass(box);
-      box.addEventListener("change", () => syncCheckedClass(box));
-    }
-
-    function setupApproversPointerSort(approversBoxId, hiddenId) {
-      const box = document.getElementById(approversBoxId);
-      const hidden = document.getElementById(hiddenId);
-      if (!box || !hidden) return;
-
-      const ul = box.querySelector("ul");
-      if (!ul) return;
-
-      // ✅ li 맨 앞에 handle을 넣는다 (label 밖!)
-      ul.querySelectorAll("li").forEach(li => {
-        if (li.querySelector(".drag-handle")) return;
-
-        const handle = document.createElement("div");
-        handle.className = "drag-handle";
-        handle.textContent = "↕️";
-        handle.setAttribute("aria-label", "드래그로 순서 변경");
-
-        li.insertBefore(handle, li.firstChild);
-      });
-
-      syncCheckedClass(box);
-      hidden.value = getCheckedIdsInDomOrder(box).join(",");
-
-      box.addEventListener("change", function (e) {
-        const t = e.target;
-        if (t && t.type === "checkbox") {
-          syncCheckedClass(box);
-          hidden.value = getCheckedIdsInDomOrder(box).join(",");
-        }
-      });
-
-      let draggingLi = null;
-      let placeholder = null;
-
-      function makePlaceholder(heightPx) {
-        const ph = document.createElement("li");
-        ph.className = "placeholder";
-        ph.style.height = heightPx + "px";
-        return ph;
-      }
-
-      function getLiUnderPointer(clientY) {
-        const lis = Array.from(ul.querySelectorAll("li")).filter(li => li !== draggingLi && li !== placeholder);
-        for (const li of lis) {
-          const rect = li.getBoundingClientRect();
-          const mid = rect.top + rect.height / 2;
-          if (clientY < mid) return li;
-        }
-        return null;
-      }
-
-      function onPointerMove(e) {
-        if (!draggingLi || !placeholder) return;
-
-        const targetLi = getLiUnderPointer(e.clientY);
-        if (targetLi) ul.insertBefore(placeholder, targetLi);
-        else ul.appendChild(placeholder);
-      }
-
-      function endDrag() {
-        if (!draggingLi || !placeholder) return;
-
-        draggingLi.classList.remove("dragging");
-        ul.insertBefore(draggingLi, placeholder);
-        placeholder.remove();
-
-        draggingLi = null;
-        placeholder = null;
-
-        hidden.value = getCheckedIdsInDomOrder(box).join(",");
-      }
-
-      // 핸들에서만 드래그 시작
-      ul.querySelectorAll(".drag-handle").forEach(handle => {
-        handle.addEventListener("pointerdown", function (e) {
-          const li = e.target.closest("li");
-          if (!li) return;
-
-          draggingLi = li;
-          draggingLi.classList.add("dragging");
-
-          const rect = li.getBoundingClientRect();
-          placeholder = makePlaceholder(rect.height);
-
-          ul.insertBefore(placeholder, draggingLi.nextSibling);
-
-          // 스크롤/클릭 방지
-          e.preventDefault();
-          e.stopPropagation();
-
-          // capture로 안정화
-          if (handle.setPointerCapture) {
-            handle.setPointerCapture(e.pointerId);
-          }
-
-          document.addEventListener("pointermove", onPointerMove, { passive: false });
-
-          document.addEventListener("pointerup", function _up(ev) {
-            document.removeEventListener("pointermove", onPointerMove);
-            document.removeEventListener("pointerup", _up);
-            endDrag();
-          });
-        });
-      });
-
-      const form = box.closest("form");
-      if (form) {
-        form.addEventListener("submit", function () {
-          hidden.value = getCheckedIdsInDomOrder(box).join(",");
-        });
-      }
-    }
-
-    setupSimpleBox("consultantsBox");
-    setupSimpleBox("receiversBox");
-
-    setupApproversPointerSort("approversBox", "id_approvers_order");
-
-    // ✅ 상신 버튼 연타 방지 + 로딩 표시
-    const formEl = document.querySelector("form[enctype='multipart/form-data']");
-    const btn = document.getElementById("submitBtn");
-    const txt = document.getElementById("submitText");
-    const sp = document.getElementById("submitSpinner");
-
-    if (formEl && btn) {
-      let submitting = false;
-      formEl.addEventListener("submit", function () {
-        if (submitting) return false;
-        submitting = true;
-
-        btn.disabled = true;
-        btn.style.opacity = "0.7";
-        btn.style.cursor = "not-allowed";
-        if (txt) txt.textContent = "상신 중...";
-        if (sp) sp.style.display = "inline";
-      });
-    }
-  });
-  </script>
+  <script src="{% static 'js/doc_create.js' %}"></script>
 {% endblock %}
