@@ -3,7 +3,6 @@
 {% block title %}문서 상신 | 전자결재{% endblock %}
 
 {% block content %}
-  <!-- doc_create 전용 CSS/JS 로드 -->
   <link rel="stylesheet" href="{% static 'css/doc_create.css' %}">
 
   <div class="card doc-create-card">
@@ -32,39 +31,28 @@
       </div>
 
       <div class="grid doc-create-grid">
-        <!-- ✅ 협의자 -->
         <div class="field">
-          <label>협의자</label>
+          <label for="{{ form.consultants.id_for_label }}">협의자</label>
+
           <div class="pickbox" id="consultantsBox">
             <ul>
-              {% for choice in form.consultants %}
-                <li>
-                  <label for="{{ choice.id_for_label }}">
-                    {{ choice.tag }}
-                    <span>{{ choice.choice_label }}</span>
-                  </label>
-                </li>
+              {% for cb in form.consultants %}
+                <li>{{ cb }}</li>
               {% endfor %}
             </ul>
           </div>
+
           <div class="help">필요 시 여러 명 선택</div>
           {% if form.consultants.errors %}<div class="help help-error">{{ form.consultants.errors }}</div>{% endif %}
         </div>
 
-        <!-- ✅ 결재자(드래그 정렬) -->
         <div class="field">
-          <label>결재자(순서대로)</label>
+          <label for="{{ form.approvers.id_for_label }}">결재자(순서대로)</label>
 
           <div class="pickbox" id="approversBox" data-sortable="approvers">
             <ul>
-              {% for choice in form.approvers %}
-                <li>
-                  {# JS가 li 맨 앞에 ↕️ 핸들을 insert 합니다. label 밖! #}
-                  <label for="{{ choice.id_for_label }}">
-                    {{ choice.tag }}
-                    <span>{{ choice.choice_label }}</span>
-                  </label>
-                </li>
+              {% for cb in form.approvers %}
+                <li>{{ cb }}</li>
               {% endfor %}
             </ul>
           </div>
@@ -79,21 +67,17 @@
         </div>
       </div>
 
-      <!-- ✅ 수신/열람자 -->
       <div class="field">
-        <label>수신/열람자</label>
+        <label for="{{ form.receivers.id_for_label }}">수신/열람자</label>
+
         <div class="pickbox" id="receiversBox">
           <ul>
-            {% for choice in form.receivers %}
-              <li>
-                <label for="{{ choice.id_for_label }}">
-                  {{ choice.tag }}
-                  <span>{{ choice.choice_label }}</span>
-                </label>
-              </li>
+            {% for cb in form.receivers %}
+              <li>{{ cb }}</li>
             {% endfor %}
           </ul>
         </div>
+
         <div class="help">완료 후 열람자(수신자) 목록</div>
         {% if form.receivers.errors %}<div class="help help-error">{{ form.receivers.errors }}</div>{% endif %}
       </div>
