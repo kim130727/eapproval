@@ -70,6 +70,12 @@
   gap: 8px;
 }
 
+/* ✅ 결재자: 체크된 항목은 카드에서도 드래그 느낌(커서) */
+#approversBox label.is-checked {
+  cursor: grab;
+}
+
+/* 드래그 핸들 */
 .drag-handle {
   display: inline-flex;
   align-items: center;
@@ -87,11 +93,21 @@
 
 .drag-handle:active { cursor: grabbing; }
 
+/* ✅ 드래그 중 시각/터치 충돌 최소화 */
 #approversBox li.dragging {
   opacity: 0.85;
   transform: scale(1.01);
 }
 
+#approversBox li.dragging .drag-handle {
+  cursor: grabbing;
+}
+
+#approversBox li.dragging > label {
+  cursor: grabbing;
+}
+
+/* ✅ placeholder */
 #approversBox li.placeholder {
   border: 2px dashed rgba(37, 99, 235, 0.35);
   border-radius: 12px;
@@ -101,3 +117,26 @@
 
 /* 버튼 영역 */
 .doc-create-actions { margin-top: 14px; }
+
+/* ✅ 협의자/수신자: 1열(상하)로 고정 */
+#consultantsBox ul,
+#receiversBox ul {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* ===== 협의자 / 결재자 / 수신자 박스 가로폭 고정 ===== */
+#consultantsBox,
+#approversBox,
+#receiversBox {
+  width: 100%;
+  max-width: 420px;
+}
+
+#consultantsBox label,
+#receiversBox label,
+#approversBox label {
+  width: 100%;
+  box-sizing: border-box;
+}

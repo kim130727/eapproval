@@ -32,20 +32,41 @@
       </div>
 
       <div class="grid doc-create-grid">
+        <!-- ✅ 협의자 -->
         <div class="field">
-          <label for="{{ form.consultants.id_for_label }}">협의자</label>
+          <label>협의자</label>
           <div class="pickbox" id="consultantsBox">
-            {{ form.consultants }}
+            <ul>
+              {% for choice in form.consultants %}
+                <li>
+                  <label for="{{ choice.id_for_label }}">
+                    {{ choice.tag }}
+                    <span>{{ choice.choice_label }}</span>
+                  </label>
+                </li>
+              {% endfor %}
+            </ul>
           </div>
           <div class="help">필요 시 여러 명 선택</div>
           {% if form.consultants.errors %}<div class="help help-error">{{ form.consultants.errors }}</div>{% endif %}
         </div>
 
+        <!-- ✅ 결재자(드래그 정렬) -->
         <div class="field">
-          <label for="{{ form.approvers.id_for_label }}">결재자(순서대로)</label>
+          <label>결재자(순서대로)</label>
 
           <div class="pickbox" id="approversBox" data-sortable="approvers">
-            {{ form.approvers }}
+            <ul>
+              {% for choice in form.approvers %}
+                <li>
+                  {# JS가 li 맨 앞에 ↕️ 핸들을 insert 합니다. label 밖! #}
+                  <label for="{{ choice.id_for_label }}">
+                    {{ choice.tag }}
+                    <span>{{ choice.choice_label }}</span>
+                  </label>
+                </li>
+              {% endfor %}
+            </ul>
           </div>
 
           <div class="help">{{ form.approvers.help_text }}</div>
@@ -58,10 +79,20 @@
         </div>
       </div>
 
+      <!-- ✅ 수신/열람자 -->
       <div class="field">
-        <label for="{{ form.receivers.id_for_label }}">수신/열람자</label>
+        <label>수신/열람자</label>
         <div class="pickbox" id="receiversBox">
-          {{ form.receivers }}
+          <ul>
+            {% for choice in form.receivers %}
+              <li>
+                <label for="{{ choice.id_for_label }}">
+                  {{ choice.tag }}
+                  <span>{{ choice.choice_label }}</span>
+                </label>
+              </li>
+            {% endfor %}
+          </ul>
         </div>
         <div class="help">완료 후 열람자(수신자) 목록</div>
         {% if form.receivers.errors %}<div class="help help-error">{{ form.receivers.errors }}</div>{% endif %}
