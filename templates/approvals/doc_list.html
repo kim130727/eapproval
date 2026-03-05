@@ -1,11 +1,22 @@
+<!-- templates/approvals/doc_list.html -->
 {% extends "base.html" %}
 {% block title %}{{ title }} | 전자결재{% endblock %}
 
 {% block content %}
   <div class="card">
-    <div class="row" style="justify-content:space-between;">
+    <div class="row" style="justify-content:space-between; align-items:center;">
       <h2 style="margin:0;">{{ title }}</h2>
       <a class="btn btn-primary" href="{% url 'approvals:doc_create' %}">문서 상신</a>
+    </div>
+
+    <!-- ✅ CSV 저장 버튼 (각 문서함별) -->
+    <div class="row" style="margin-top:12px; gap:8px; flex-wrap:wrap;">
+      {% if csv_export_url and csv_kind %}
+        <a class="btn" href="{% url csv_export_url csv_kind %}">CSV 저장</a>
+      {% elif title == "내 문서함" %}
+        <!-- 구버전 호환(혹시 컨텍스트가 없을 때) -->
+        <a class="btn" href="{% url 'approvals:documents_export_csv' %}">CSV 저장</a>
+      {% endif %}
     </div>
 
     <div style="margin-top:12px;" class="table-wrap">
@@ -13,7 +24,7 @@
         <colgroup>
           <col style="width:96px;">
           <col style="width:auto;">
-          <col style="width:110px;">
+          <col style="width:140px;">
           <col style="width:140px;">
         </colgroup>
 
@@ -25,10 +36,12 @@
             <th>수정</th>
           </tr>
         </thead>
+
         <tbody>
         {% for doc in docs %}
           <tr>
             <td><span class="badge">{{ doc.get_status_display }}</span></td>
+
             <td>
               <a href="{% url 'approvals:doc_detail' doc.id %}" style="display:inline-block;">
                 {{ doc.title }}
@@ -37,8 +50,25 @@
                 #{{ doc.id }} · 현재순서 {{ doc.current_line_order }}
               </div>
             </td>
-            <td>{{ doc.created_by.username }}</td>
-            <td class="muted">{{ doc.updated_at|date:"Y-m-d H:i" }}</td>
+
+            <!-- ✅ Profile 이름 우선 표시 (태그/필터 없이 안전 처리) -->
+            <td>
+              {% if doc.created_by and doc.created_by.profile and doc.created_by.profile.display_name %}
+                {{ doc.created_by.profile.display_name }}
+              {% elif doc.created_by %}
+                {{ doc.created_by.username }}
+              {% else %}
+                -
+              {% endif %}
+            </td>
+
+            <td class="muted">
+              {% if doc.updated_at %}
+                {{ doc.updated_at|date:"Y-m-d H:i" }}
+              {% else %}
+                -
+              {% endif %}
+            </td>
           </tr>
         {% empty %}
           <tr>

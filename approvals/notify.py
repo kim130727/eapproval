@@ -20,6 +20,39 @@ class Recipient:
     email: str
 
 
+def _display_name(user) -> str:
+    """
+    ✅ 표시 이름 우선순위:
+    1) user.profile.display_name()
+    2) user.profile.full_name
+    3) user.get_full_name()
+    4) user.username
+    """
+    if not user:
+        return "사용자"
+
+    profile = getattr(user, "profile", None)
+    if profile and hasattr(profile, "display_name"):
+        try:
+            v = profile.display_name()
+            if v:
+                return v
+        except Exception:
+            pass
+
+    if profile and getattr(profile, "full_name", ""):
+        v = (profile.full_name or "").strip()
+        if v:
+            return v
+
+    if hasattr(user, "get_full_name"):
+        v = (user.get_full_name() or "").strip()
+        if v:
+            return v
+
+    return (getattr(user, "username", "") or "사용자").strip()
+
+
 def _get_user_email(user) -> str:
     if not user:
         return ""
@@ -115,14 +148,21 @@ def _current_pending_line(doc: Document):
 
 def notify_on_submit(*, request=None, doc: Document, user=None) -> None:
     """
-    상신 알림: 협의자+결재자(활성 라인)의 '전체'에게 알림.
+    ✅ 상신 알림: 협의자+결재자(활성 라인)의 '전체'에게 알림.
     """
     url = _doc_url(doc, request=request)
     pending = _pending_active_lines(doc)
     recipients = _iter_recipients([ln.user for ln in pending])
 
+    creator_name = _display_name(getattr(doc, "created_by", None))
+
     subject = f"[전자결재] 상신: {doc.title}"
-    body = f"문서가 상신되었습니다.\n\n제목: {doc.title}\n링크: {url}"
+    body = (
+        f"문서가 상신되었습니다.\n\n"
+        f"제목: {doc.title}\n"
+        f"상신자: {creator_name}\n"
+        f"링크: {url}"
+    )
 
     _toast(request, "info", f"상신 처리되었습니다. ({doc.title})")
     _send_email(subject, body, [r.email for r in recipients])
@@ -130,40 +170,39 @@ def notify_on_submit(*, request=None, doc: Document, user=None) -> None:
 
 def notify_on_line_approved(*, request=None, doc: Document, user) -> None:
     """
-    라인 승인/협의 완료 알림:
+    ✅ 라인 승인/협의 완료 알림:
     - 다음 처리자(다음 pending 라인)에게 알림
     - 다음 라인이 없으면 완료 알림(상신자)
     """
     url = _doc_url(doc, request=request)
     next_line = _current_pending_line(doc)
 
-    actor_name = (
-        getattr(user, "get_full_name", lambda: "")()  # type: ignore[misc]
-        or getattr(user, "username", "")
-        or "처리자"
-    )
+    actor_name = _display_name(user)
 
     if next_line:
         recipients = _iter_recipients([next_line.user])
+
+        next_name = _display_name(next_line.user)
+
         subject = f"[전자결재] 처리 요청: {doc.title}"
         body = (
             f"이전 단계가 처리되었습니다.\n\n"
             f"문서: {doc.title}\n"
             f"처리자: {actor_name}\n"
-            f"다음 처리자: {getattr(next_line.user, 'username', '')}\n"
+            f"다음 처리자: {next_name}\n"
             f"링크: {url}"
         )
         _toast(request, "info", f"다음 처리자에게 알림을 보냈습니다. ({doc.title})")
         _send_email(subject, body, [r.email for r in recipients])
         return
 
-    # 완료면 상신자에게 완료 알림
+    # ✅ 다음 라인이 없으면 완료 알림(상신자)
     notify_on_completed(request=request, doc=doc, user=getattr(doc, "created_by", None))
 
 
 def notify_on_completed(*, request=None, doc: Document, user=None) -> None:
     """
-    완료 알림: 기본은 상신자(creator)에게.
+    ✅ 완료 알림: 기본은 상신자(creator)에게.
     user를 넘기면 그 사용자에게도/또는 대체로 보낼 수 있음.
     """
     url = _doc_url(doc, request=request)
@@ -171,8 +210,15 @@ def notify_on_completed(*, request=None, doc: Document, user=None) -> None:
     target = user or getattr(doc, "created_by", None)
     recipients = _iter_recipients([target] if target else [])
 
+    creator_name = _display_name(getattr(doc, "created_by", None))
+
     subject = f"[전자결재] 완료: {doc.title}"
-    body = f"문서가 완료되었습니다.\n\n제목: {doc.title}\n링크: {url}"
+    body = (
+        f"문서가 완료되었습니다.\n\n"
+        f"제목: {doc.title}\n"
+        f"상신자: {creator_name}\n"
+        f"링크: {url}"
+    )
 
     _toast(request, "success", f"문서가 완료되었습니다. ({doc.title})")
     _send_email(subject, body, [r.email for r in recipients])
@@ -180,7 +226,7 @@ def notify_on_completed(*, request=None, doc: Document, user=None) -> None:
 
 def notify_on_rejected(*, request=None, doc: Document, user, reason: str) -> None:
     """
-    반려 알림: 기본은 상신자(created_by)에게.
+    ✅ 반려 알림: 기본은 상신자(created_by)에게.
     """
     url = _doc_url(doc, request=request)
     reason = (reason or "").strip()
@@ -188,8 +234,18 @@ def notify_on_rejected(*, request=None, doc: Document, user, reason: str) -> Non
     creator = getattr(doc, "created_by", None)
     recipients = _iter_recipients([creator] if creator else [])
 
+    actor_name = _display_name(user)
+    creator_name = _display_name(creator)
+
     subject = f"[전자결재] 반려: {doc.title}"
-    body = f"문서가 반려되었습니다.\n\n제목: {doc.title}\n사유: {reason}\n링크: {url}"
+    body = (
+        f"문서가 반려되었습니다.\n\n"
+        f"제목: {doc.title}\n"
+        f"상신자: {creator_name}\n"
+        f"반려 처리자: {actor_name}\n"
+        f"사유: {reason}\n"
+        f"링크: {url}"
+    )
 
     _toast(request, "error", f"문서가 반려되었습니다. ({doc.title})")
     _send_email(subject, body, [r.email for r in recipients])

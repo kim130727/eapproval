@@ -1,0 +1,62 @@
+<!-- templates/approvals/profile_list.html -->
+{% extends "base.html" %}
+{% load profile_tags %}
+
+{% block title %}사용자 목록 | 전자결재{% endblock %}
+
+{% block content %}
+<div class="card">
+
+  <div class="row" style="justify-content:space-between;">
+    <h2 style="margin:0;">사용자 목록</h2>
+  </div>
+
+  <div style="margin-top:12px;" class="table-wrap">
+    <table class="table">
+      <colgroup>
+        <col style="width:220px;">
+        <col style="width:200px;">
+        <col style="width:200px;">
+        <col style="width:160px;">
+      </colgroup>
+
+      <thead>
+        <tr>
+          <th>이름</th>
+          <th>전화</th>
+          <th>이메일</th>
+          <th>권한</th>
+        </tr>
+      </thead>
+
+      <tbody>
+      {% for p in profiles %}
+        <tr>
+
+          <!-- ✅ Profile 이름 우선 표시 -->
+          <td>{{ p.user|display_name }}</td>
+
+          <td>
+            {{ p.phone|default:"-" }}
+          </td>
+
+          <td>
+            {{ p.user.email|default:"-" }}
+          </td>
+
+          <td>
+            {{ p.get_role_display }}
+          </td>
+
+        </tr>
+      {% empty %}
+        <tr>
+          <td colspan="4" class="muted">사용자가 없습니다.</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+</div>
+{% endblock %}

@@ -1,3 +1,4 @@
+<!-- templates/base.html -->
 <!doctype html>
 <html lang="ko">
 <head>
@@ -30,49 +31,51 @@
 
         {% if user.is_authenticated %}
           <div class="profile-wrap">
-        <span class="muted">안녕하세요, <strong>{{ user.username }}</strong>님</span>
+            <span class="muted">
+              안녕하세요, <strong>{{ user.profile.display_name|default:user.username }}</strong>님
+            </span>
 
-        <!-- ✅ 프로필 아이콘 버튼 -->
-  <button type="button" class="profile-btn" id="profileBtn" aria-haspopup="true" aria-expanded="false">
-    <span class="profile-avatar">
-      {{ user.profile.display_name|default:user.username|slice:":1" }}
-    </span>
-  </button>
+            <!-- ✅ 프로필 아이콘 버튼 -->
+            <button type="button" class="profile-btn" id="profileBtn" aria-haspopup="true" aria-expanded="false">
+              <span class="profile-avatar">
+                {{ user.profile.display_name|default:user.username|slice:":1" }}
+              </span>
+            </button>
 
-  <!-- ✅ 드롭다운(팝오버) -->
-  <div class="profile-popover" id="profilePopover" role="menu" aria-labelledby="profileBtn">
-    <div class="profile-popover-title">내 프로필</div>
+            <!-- ✅ 드롭다운(팝오버) -->
+            <div class="profile-popover" id="profilePopover" role="menu" aria-labelledby="profileBtn">
+              <div class="profile-popover-title">내 프로필</div>
 
-    <div class="profile-row">
-      <div class="profile-label">이름</div>
-      <div class="profile-value">
-        {{ user.profile.full_name|default:user.first_name|default:user.username }}
-      </div>
-    </div>
+              <div class="profile-row">
+                <div class="profile-label">이름</div>
+                <div class="profile-value">
+                  {{ user.profile.display_name|default:user.username }}
+                </div>
+              </div>
 
-    <div class="profile-row">
-      <div class="profile-label">전화</div>
-      <div class="profile-value">
-        {{ user.profile.phone|default:"-" }}
-      </div>
-    </div>
+              <div class="profile-row">
+                <div class="profile-label">전화</div>
+                <div class="profile-value">
+                  {{ user.profile.phone|default:"-" }}
+                </div>
+              </div>
 
-    <div class="profile-row">
-      <div class="profile-label">이메일</div>
-      <div class="profile-value">
-        {{ user.email|default:"-" }}
-      </div>
-    </div>
-  </div>
+              <div class="profile-row">
+                <div class="profile-label">이메일</div>
+                <div class="profile-value">
+                  {{ user.email|default:"-" }}
+                </div>
+              </div>
 
-    </div>
-          <!-- ✅ 추가: 비밀번호 변경 -->
-          <a class="btn" href="{% url 'accounts:password_change' %}">비밀번호 변경</a>
-
-          <form method="post" action="{% url 'accounts:logout' %}" style="display:inline;">
-            {% csrf_token %}
-            <button class="btn" type="submit">로그아웃</button>
-          </form>
+              <div class="profile-actions">
+                <a class="btn" href="{% url 'accounts:password_change' %}">비밀번호 변경</a>
+                <form method="post" action="{% url 'accounts:logout' %}" style="display:inline;">
+                  {% csrf_token %}
+                  <button class="btn" type="submit">로그아웃</button>
+                </form>
+              </div>
+            </div>
+          </div>
         {% else %}
           <a class="btn" href="{% url 'accounts:login' %}">로그인</a>
           <a class="btn btn-primary" href="{% url 'accounts:signup' %}">회원가입</a>
@@ -98,6 +101,5 @@
   </main>
 
   <script src="{% static 'js/base.js' %}"></script>
-
 </body>
 </html>
