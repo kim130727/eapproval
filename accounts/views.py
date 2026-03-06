@@ -1,10 +1,11 @@
-# accounts/views.py
 from django.contrib import messages
 from django.contrib.auth import get_user_model, views as auth_views
 from django.contrib.auth.decorators import login_required, user_passes_test
+from django.contrib.auth.models import Group
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
 from django.utils.decorators import method_decorator
+from django.views.decorators.http import require_POST
 
 from approvals.permissions import CHAIR_GROUP
 from .forms import SignupForm, ProfileUpdateForm
@@ -14,9 +15,6 @@ from .utils import sync_profile_role_from_groups
 User = get_user_model()
 
 
-# =========================
-# Auth: Signup / Login / Logout
-# =========================
 def signup_view(request):
     if request.user.is_authenticated:
         return redirect("approvals:home")
@@ -39,20 +37,15 @@ class CustomLoginView(auth_views.LoginView):
 
 
 class CustomLogoutView(auth_views.LogoutView):
-    # settings.py 의 LOGOUT_REDIRECT_URL 을 따릅니다.
     pass
 
 
-# =========================
-# ✅ Password Change (로그인 사용자 본인 변경)
-# =========================
 @method_decorator(login_required, name="dispatch")
 class CustomPasswordChangeView(auth_views.PasswordChangeView):
     template_name = "accounts/password_change_form.html"
     success_url = reverse_lazy("accounts:password_change_done")
 
     def form_valid(self, form):
-        # PasswordChangeView는 내부적으로 세션 해시도 갱신해서 로그아웃되지 않습니다.
         messages.success(self.request, "비밀번호가 변경되었습니다. 다음 로그인부터 새 비밀번호를 사용하세요.")
         return super().form_valid(form)
 
@@ -62,9 +55,6 @@ class CustomPasswordChangeDoneView(auth_views.PasswordChangeDoneView):
     template_name = "accounts/password_change_done.html"
 
 
-# =========================
-# Admin helpers
-# =========================
 def is_staff_user(user) -> bool:
     return bool(user and user.is_authenticated and user.is_staff)
 
@@ -72,10 +62,6 @@ def is_staff_user(user) -> bool:
 staff_required = user_passes_test(is_staff_user)
 
 
-# =========================
-# ✅ Staff: Profile list / appoint & demote chair
-# (templates/approvals/profile_list.html 에서 링크로 호출하는 구조 유지)
-# =========================
 @staff_required
 def profile_list(request):
     profiles = Profile.objects.select_related("user").order_by("user__username")
@@ -83,25 +69,21 @@ def profile_list(request):
 
 
 @staff_required
+@require_POST
 def appoint_chair_view(request, profile_id: int):
     profile = get_object_or_404(Profile, id=profile_id)
     user = profile.user
 
-    # 그룹 부여
-    chair_group = user.groups.filter(name=CHAIR_GROUP).first()
-    if chair_group is None:
-        from django.contrib.auth.models import Group
-
-        chair_group, _ = Group.objects.get_or_create(name=CHAIR_GROUP)
-
+    chair_group, _ = Group.objects.get_or_create(name=CHAIR_GROUP)
     user.groups.add(chair_group)
     sync_profile_role_from_groups(user)
 
-    messages.success(request, f"{user.username} 님을 위원장으로 임명했습니다.")
+    messages.success(request, f"{profile.display_name()} 님을 위원장으로 임명했습니다.")
     return redirect("accounts:profile_list")
 
 
 @staff_required
+@require_POST
 def demote_chair_view(request, profile_id: int):
     profile = get_object_or_404(Profile, id=profile_id)
     user = profile.user
@@ -109,10 +91,10 @@ def demote_chair_view(request, profile_id: int):
     user.groups.remove(*user.groups.filter(name=CHAIR_GROUP))
     sync_profile_role_from_groups(user)
 
-    messages.success(request, f"{user.username} 님의 위원장 권한을 해제했습니다.")
+    messages.success(request, f"{profile.display_name()} 님의 위원장 권한을 해제했습니다.")
     return redirect("accounts:profile_list")
 
-#프로필 새창 열기
+
 @login_required
 def profile_detail(request):
     profile, _ = Profile.objects.get_or_create(user=request.user)

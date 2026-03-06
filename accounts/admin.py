@@ -1,5 +1,3 @@
-# accounts/admin.py
-
 from django import forms
 from django.contrib import admin
 from django.contrib.auth import get_user_model
@@ -13,16 +11,37 @@ User = get_user_model()
 
 @admin.register(Profile)
 class ProfileAdmin(admin.ModelAdmin):
-    list_display = ("user", "full_name", "role", "phone")
-    list_filter = ("role",)
-    search_fields = ("user__username", "full_name", "phone")
+    list_display = (
+        "user",
+        "full_name",
+        "role",
+        "phone",
+        "pungsam_cho",
+        "pungsam_first",
+        "pungsam_gi",
+        "leader_course",
+        "leader_status",
+    )
+    list_filter = (
+        "role",
+        "pungsam_cho",
+        "pungsam_first",
+        "pungsam_gi",
+        "leader_course",
+    )
+    search_fields = (
+        "user__username",
+        "full_name",
+        "phone",
+        "leader_status",
+    )
 
 
 class UserWithProfileAdminForm(forms.ModelForm):
     """
-    ✅ User 변경 화면에서 Profile.full_name만 User 필드처럼 보여주기
-    ✅ email은 User 기본 필드로 그대로 저장
-    - role은 '그룹 기준' 단일화로 인해 직접 수정하지 않음(자동 동기화)
+    User 변경 화면에서 Profile.full_name만 User 필드처럼 보여주기
+    email은 User 기본 필드로 그대로 저장
+    role은 그룹 기준 단일화로 인해 직접 수정하지 않음(자동 동기화)
     """
 
     full_name = forms.CharField(label="이름", required=False, max_length=150)
@@ -50,7 +69,6 @@ class UserWithProfileAdminForm(forms.ModelForm):
             defaults={"full_name": full_name},
         )
 
-        # ✅ 그룹 기준으로 role 캐시 동기화
         sync_profile_role_from_groups(user)
         return user
 
@@ -73,7 +91,7 @@ class CustomUserAdmin(DjangoUserAdmin):
     fieldsets = (
         (None, {"fields": ("username", "password")}),
         ("Personal info", {"fields": ("first_name", "email")}),
-        ("Profile", {"fields": ("full_name",)}),  # ✅ role 제거
+        ("Profile", {"fields": ("full_name",)}),
         (
             "Permissions",
             {"fields": ("is_active", "is_staff", "is_superuser", "groups", "user_permissions")},

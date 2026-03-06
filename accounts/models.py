@@ -1,11 +1,10 @@
-# accounts/models.py
 from django.conf import settings
 from django.db import models
 
 
 class Profile(models.Model):
     """
-    ✅ role은 '권한 기준'이 아니라 '표시/검색용 캐시'입니다.
+    role은 '권한 기준'이 아니라 '표시/검색용 캐시'입니다.
     - 권한/필터 기준(단일 기준): User.groups 의 CHAIR 그룹
     - role 값은 signals(m2m_changed)로 자동 동기화됩니다.
     """
@@ -18,11 +17,84 @@ class Profile(models.Model):
         (ROLE_CHAIR, "위원장"),
     ]
 
+    TRAINING_STATUS_CHOICES = [
+        ("", "미진행"),
+        ("ING", "진행"),
+        ("DONE", "완료"),
+        ("GRAD", "수료"),
+    ]
+
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     full_name = models.CharField(max_length=150, blank=True, default="")
     phone = models.CharField(max_length=20, blank=True, null=True)
 
-    # ✅ 표시/검색용 캐시 필드(그룹이 단일 기준)
+    # 풍삶초
+    pungsam_cho = models.CharField(
+        "풍삶초",
+        max_length=10,
+        choices=TRAINING_STATUS_CHOICES,
+        blank=True,
+        default="",
+    )
+    pungsam_cho_date = models.CharField(
+        "풍삶초 수료일",
+        max_length=50,
+        blank=True,
+        default="",
+    )
+
+    # 풍삶첫
+    pungsam_first = models.CharField(
+        "풍삶첫",
+        max_length=10,
+        choices=TRAINING_STATUS_CHOICES,
+        blank=True,
+        default="",
+    )
+    pungsam_first_date = models.CharField(
+        "풍삶첫 수료일",
+        max_length=50,
+        blank=True,
+        default="",
+    )
+
+    # 풍삶기
+    pungsam_gi = models.CharField(
+        "풍삶기",
+        max_length=10,
+        choices=TRAINING_STATUS_CHOICES,
+        blank=True,
+        default="",
+    )
+    pungsam_gi_date = models.CharField(
+        "풍삶기 수료일",
+        max_length=50,
+        blank=True,
+        default="",
+    )
+
+    # 이끄미
+    leader_course = models.CharField(
+        "이끄미수료",
+        max_length=10,
+        choices=TRAINING_STATUS_CHOICES,
+        blank=True,
+        default="",
+    )
+    leader_course_date = models.CharField(
+        "이끄미수료일",
+        max_length=50,
+        blank=True,
+        default="",
+    )
+    leader_status = models.CharField(
+        "이끄미현황",
+        max_length=100,
+        blank=True,
+        default="",
+    )
+
+    # 표시/검색용 캐시 필드(그룹이 단일 기준)
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default=ROLE_MEMBER)
 
     def display_name(self):

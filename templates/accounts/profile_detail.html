@@ -9,6 +9,7 @@
   </div>
 
   <div style="margin-top:18px;">
+
     <div class="profile-row">
       <div class="profile-label">아이디</div>
       <div class="profile-value">{{ profile_user.username }}</div>
@@ -41,9 +42,80 @@
         {{ profile_user.profile.get_role_display }}
       </div>
     </div>
+
+    <hr style="margin:18px 0;">
+
+    <!-- 풍삶초 -->
+    <div class="profile-row">
+      <div class="profile-label">풍삶초</div>
+      <div class="profile-value">
+        {{ profile.get_pungsam_cho_display|default:"-" }}
+      </div>
+    </div>
+
+    <div class="profile-row">
+      <div class="profile-label">풍삶초 수료일</div>
+      <div class="profile-value">
+        {{ profile.pungsam_cho_date|default:"-" }}
+      </div>
+    </div>
+
+    <!-- 풍삶첫 -->
+    <div class="profile-row">
+      <div class="profile-label">풍삶첫</div>
+      <div class="profile-value">
+        {{ profile.get_pungsam_first_display|default:"-" }}
+      </div>
+    </div>
+
+    <div class="profile-row">
+      <div class="profile-label">풍삶첫 수료일</div>
+      <div class="profile-value">
+        {{ profile.pungsam_first_date|default:"-" }}
+      </div>
+    </div>
+
+    <!-- 풍삶기 -->
+    <div class="profile-row">
+      <div class="profile-label">풍삶기</div>
+      <div class="profile-value">
+        {{ profile.get_pungsam_gi_display|default:"-" }}
+      </div>
+    </div>
+
+    <div class="profile-row">
+      <div class="profile-label">풍삶기 수료일</div>
+      <div class="profile-value">
+        {{ profile.pungsam_gi_date|default:"-" }}
+      </div>
+    </div>
+
+    <!-- 이끄미 -->
+    <div class="profile-row">
+      <div class="profile-label">이끄미수료</div>
+      <div class="profile-value">
+        {{ profile.get_leader_course_display|default:"-" }}
+      </div>
+    </div>
+
+    <div class="profile-row">
+      <div class="profile-label">이끄미수료일</div>
+      <div class="profile-value">
+        {{ profile.leader_course_date|default:"-" }}
+      </div>
+    </div>
+
+    <div class="profile-row">
+      <div class="profile-label">이끄미현황</div>
+      <div class="profile-value">
+        {{ profile.leader_status|default:"-" }}
+      </div>
+    </div>
+
   </div>
 
   <div class="row" style="margin-top:18px;">
+    <a class="btn btn-primary" href="{% url 'accounts:profile_edit' %}">프로필 수정</a>
     <a class="btn" href="{% url 'accounts:password_change' %}">비밀번호 변경</a>
 
     <form method="post" action="{% url 'accounts:logout' %}" style="display:inline;">
