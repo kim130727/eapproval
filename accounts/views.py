@@ -7,7 +7,7 @@ from django.urls import reverse_lazy
 from django.utils.decorators import method_decorator
 
 from approvals.permissions import CHAIR_GROUP
-from .forms import SignupForm
+from .forms import SignupForm, ProfileUpdateForm
 from .models import Profile
 from .utils import sync_profile_role_from_groups
 
@@ -111,3 +111,40 @@ def demote_chair_view(request, profile_id: int):
 
     messages.success(request, f"{user.username} 님의 위원장 권한을 해제했습니다.")
     return redirect("accounts:profile_list")
+
+#프로필 새창 열기
+@login_required
+def profile_detail(request):
+    profile, _ = Profile.objects.get_or_create(user=request.user)
+    return render(
+        request,
+        "accounts/profile_detail.html",
+        {
+            "profile_user": request.user,
+            "profile": profile,
+        },
+    )
+
+
+@login_required
+def profile_edit(request):
+    profile, _ = Profile.objects.get_or_create(user=request.user)
+
+    if request.method == "POST":
+        form = ProfileUpdateForm(request.POST, user=request.user)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "프로필이 수정되었습니다.")
+            return redirect("accounts:profile_detail")
+    else:
+        form = ProfileUpdateForm(user=request.user)
+
+    return render(
+        request,
+        "accounts/profile_edit.html",
+        {
+            "form": form,
+            "profile_user": request.user,
+            "profile": profile,
+        },
+    )

@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}내 프로필 | 전자결재{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width:680px; margin:0 auto;">
+  <div class="row" style="justify-content:space-between; align-items:center;">
+    <h2 style="margin:0;">내 프로필</h2>
+    <a class="btn" href="{% url 'approvals:home' %}">대시보드</a>
+  </div>
+
+  <div style="margin-top:18px;">
+    <div class="profile-row">
+      <div class="profile-label">아이디</div>
+      <div class="profile-value">{{ profile_user.username }}</div>
+    </div>
+
+    <div class="profile-row">
+      <div class="profile-label">이름</div>
+      <div class="profile-value">
+        {{ profile_user.profile.display_name|default:profile_user.username }}
+      </div>
+    </div>
+
+    <div class="profile-row">
+      <div class="profile-label">전화</div>
+      <div class="profile-value">
+        {{ profile_user.profile.phone|default:"-" }}
+      </div>
+    </div>
+
+    <div class="profile-row">
+      <div class="profile-label">이메일</div>
+      <div class="profile-value">
+        {{ profile_user.email|default:"-" }}
+      </div>
+    </div>
+
+    <div class="profile-row">
+      <div class="profile-label">권한</div>
+      <div class="profile-value">
+        {{ profile_user.profile.get_role_display }}
+      </div>
+    </div>
+  </div>
+
+  <div class="row" style="margin-top:18px;">
+    <a class="btn" href="{% url 'accounts:password_change' %}">비밀번호 변경</a>
+
+    <form method="post" action="{% url 'accounts:logout' %}" style="display:inline;">
+      {% csrf_token %}
+      <button class="btn" type="submit">로그아웃</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

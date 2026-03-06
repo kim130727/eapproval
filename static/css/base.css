@@ -100,27 +100,6 @@ footer { padding: 20px 0; color:#6b7280; font-size:12px; }
   font-weight:800;
 }
 
-.profile-popover{
-  position:absolute;
-  right:0;
-  top:44px;
-  width:260px;
-  background:#fff;
-  border:1px solid #e5e7eb;
-  border-radius:14px;
-  box-shadow: 0 10px 24px rgba(0,0,0,0.12);
-  padding:12px;
-  display:none;
-  z-index:9999;
-}
-
-.profile-popover.open{ display:block; }
-
-.profile-popover-title{
-  font-weight:800;
-  margin-bottom:10px;
-}
-
 .profile-row{
   display:grid;
   grid-template-columns: 64px 1fr;
@@ -133,8 +112,6 @@ footer { padding: 20px 0; color:#6b7280; font-size:12px; }
 
 .profile-label{ color:#6b7280; font-size:12px; }
 .profile-value{ color:#111; font-size:13px; word-break:break-word; }
-
-.profile-actions{ margin-top:10px; display:flex; gap:8px; }
 
 /* =======================================================
 📱MOBILE CARD LAYOUT (doc list)
