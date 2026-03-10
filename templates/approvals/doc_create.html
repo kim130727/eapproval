@@ -58,9 +58,6 @@
           </div>
 
           <div class="help">{{ form.approvers.help_text }}</div>
-          <div class="help help-strong">
-            ✅ <strong>체크 후 ↕️ 핸들을 드래그하면 결재 순서</strong>로 저장됩니다.
-          </div>
           {% if form.approvers.errors %}<div class="help help-error">{{ form.approvers.errors }}</div>{% endif %}
 
           <input type="hidden" name="approvers_order" id="id_approvers_order" value="">
