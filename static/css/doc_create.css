@@ -140,3 +140,21 @@
   width: 100%;
   box-sizing: border-box;
 }
+
+/* ===== 모바일: 협의자/결재자/수신자 섹션 세로 1열 ===== */
+@media (max-width: 768px) {
+  .doc-create-grid {
+    grid-template-columns: 1fr;
+  }
+
+  #consultantsBox,
+  #approversBox,
+  #receiversBox {
+    max-width: none;
+    width: 100%;
+  }
+
+  .doc-create-card {
+    max-width: 100%;
+  }
+}

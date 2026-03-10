@@ -255,3 +255,45 @@ MOBILE = 카드형 자동 변환
     border-radius:12px;
   }
 }
+
+/* ===== 내 프로필 상세 전용 ===== */
+.profile-detail-card .profile-row{
+  grid-template-columns: 120px 1fr;   /* 왼쪽 열 확장 */
+  gap: 16px;
+  padding: 12px 0;
+}
+
+.profile-detail-card .profile-label{
+  font-size: 15px;   /* 기존 12px -> 확대 */
+  font-weight: 700;
+  color: #374151;
+}
+
+.profile-detail-card .profile-value{
+  font-size: 16px;   /* 기존 13px -> 확대 */
+  line-height: 1.6;
+  color: #111827;
+  word-break: break-word;
+}
+
+/* 모바일에서도 너무 작지 않게 */
+@media (max-width: 768px){
+  .profile-detail-card{
+    padding: 18px;
+  }
+
+  .profile-detail-card .profile-row{
+    grid-template-columns: 96px 1fr;   /* 모바일에서도 왼쪽 열 확보 */
+    gap: 12px;
+    padding: 10px 0;
+  }
+
+  .profile-detail-card .profile-label{
+    font-size: 14px;
+  }
+
+  .profile-detail-card .profile-value{
+    font-size: 15px;
+    line-height: 1.55;
+  }
+}
