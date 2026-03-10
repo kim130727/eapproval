@@ -64,10 +64,35 @@
   gap: 8px;
 }
 
+/* ===== 결재자만: 1열 + 핸들 오른쪽 ===== */
+#approversBox ul {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 #approversBox li {
   display: flex;
   align-items: stretch;
   gap: 8px;
+}
+
+#approversBox li > label {
+  order: 1;
+  flex: 1;
+  min-width: 0;
+}
+
+/* ✅ 핸들을 오른쪽으로 이동 */
+#approversBox li > .drag-handle {
+  order: 2;
+  margin-left: auto;
+  align-self: stretch;
+}
+
+/* ✅ 결재자: 체크된 항목은 카드에서도 드래그 느낌(커서) */
+#approversBox label.is-checked {
+  cursor: grab;
 }
 
 /* ✅ 결재자: 체크된 항목은 카드에서도 드래그 느낌(커서) */
