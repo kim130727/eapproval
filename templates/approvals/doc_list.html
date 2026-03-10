@@ -47,7 +47,20 @@
                 {{ doc.title }}
               </a>
               <div class="muted" style="font-size:12px; margin-top:4px;">
-                #{{ doc.id }} · 현재순서 {{ doc.current_line_order }}
+                문서번호 {{ doc.id }} ·
+                {% if doc.status == "COMPLETED" %}
+                  결재 완료
+                {% elif doc.status == "REJECTED" %}
+                  반려됨
+                {% elif doc.status == "IN_PROGRESS" %}
+                  {{ doc.current_line_order }}번째 단계 진행 중
+                {% elif doc.status == "SUBMITTED" %}
+                  접수됨
+                {% elif doc.status == "DRAFT" %}
+                  임시 저장
+                {% else %}
+                  진행 상태 확인 필요
+                {% endif %}
               </div>
             </td>
 

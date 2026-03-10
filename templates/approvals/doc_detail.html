@@ -12,9 +12,24 @@
     <span class="badge">{{ doc.get_status_display }}</span>
   </div>
 
+  <!-- 상태 설명 -->
+  <div class="muted" style="margin-top:8px; line-height:1.5;">
+    {% if doc.status == "COMPLETED" %}
+      이 문서는 모든 결재가 완료되었습니다.
+    {% elif doc.status == "REJECTED" %}
+      이 문서는 반려되었습니다.
+    {% elif doc.status == "IN_PROGRESS" %}
+      현재 {{ doc.current_line_order }}번째 단계가 진행 중입니다.
+    {% elif doc.status == "SUBMITTED" %}
+      문서가 접수되어 결재가 시작됩니다.
+    {% elif doc.status == "DRAFT" %}
+      이 문서는 임시 저장 상태입니다.
+    {% endif %}
+  </div>
+
   <!-- 문서 메타 -->
   <div class="muted" style="margin-top:6px;">
-    <span class="mono">#{{ doc.id }}</span>
+    <span class="mono">문서번호 {{ doc.id }}</span>
     · 작성자
       {% if doc.created_by and doc.created_by.profile and doc.created_by.profile.display_name %}
         {{ doc.created_by.profile.display_name }}
@@ -39,13 +54,23 @@
 
 <!-- 결재 라인 -->
 <div class="card" style="margin-top:14px;">
-  <h3 style="margin:0 0 8px 0;">결재 라인</h3>
+  <div class="row" style="justify-content:space-between; align-items:center;">
+    <h3 style="margin:0;">결재 라인</h3>
 
-  <div class="table-wrap">
+    {% if doc.status == "IN_PROGRESS" and current_line %}
+      <span class="badge">현재 {{ current_line.order }}번째 단계 진행 중</span>
+    {% elif doc.status == "COMPLETED" %}
+      <span class="badge">결재 완료</span>
+    {% elif doc.status == "REJECTED" %}
+      <span class="badge">반려</span>
+    {% endif %}
+  </div>
+
+  <div class="table-wrap" style="margin-top:10px;">
     <table class="table">
       <thead>
         <tr>
-          <th style="width:80px;">순서</th>
+          <th style="width:90px;">순서</th>
           <th style="width:120px;">구분</th>
           <th style="width:160px;">대상</th>
           <th style="width:120px;">상태</th>
@@ -56,14 +81,22 @@
 
       <tbody>
       {% for line in doc.lines.all %}
-        <tr>
-          <td>{{ line.order }}</td>
+        <tr
+          {% if doc.status == "IN_PROGRESS" and current_line and line.id == current_line.id %}
+            style="background:#eff6ff;"
+          {% endif %}
+        >
+          <td>
+            {{ line.order }}
+            {% if doc.status == "IN_PROGRESS" and current_line and line.id == current_line.id %}
+              <div class="muted" style="font-size:12px; margin-top:4px;">현재 진행중</div>
+            {% endif %}
+          </td>
 
           <td>
             <span class="badge">{{ line.get_role_display }}</span>
           </td>
 
-          <!-- ✅ profile 우선 표시 -->
           <td>
             {% if line.user and line.user.profile and line.user.profile.display_name %}
               {{ line.user.profile.display_name }}
@@ -85,6 +118,8 @@
           <td class="muted">
             {% if line.acted_at %}
               {{ line.acted_at|date:"Y-m-d H:i" }}
+            {% else %}
+              -
             {% endif %}
           </td>
         </tr>
@@ -137,11 +172,11 @@
 
 
 <!-- 승인 / 반려 버튼 -->
-{% if can_act %}
+{% if can_act and doc.status == "IN_PROGRESS" and current_line %}
 <div class="card" style="margin-top:14px;">
 
-  <div class="muted" style="margin-bottom:10px;">
-    현재 처리자:
+  <div class="muted" style="margin-bottom:10px; line-height:1.6;">
+    현재 <strong>{{ current_line.order }}번째 단계</strong> 처리자:
     <strong>
       {% if current_line.user and current_line.user.profile and current_line.user.profile.display_name %}
         {{ current_line.user.profile.display_name }}
@@ -153,8 +188,6 @@
     </strong>
     · 구분:
     <strong>{{ current_line.get_role_display }}</strong>
-    · 순서:
-    <strong>{{ current_line.order }}</strong>
   </div>
 
   <form method="post" action="{% url 'approvals:act_approve' doc.id %}">
