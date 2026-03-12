@@ -17,13 +17,96 @@ def _active_roles():
     return [DocumentLine.Role.CONSULT, DocumentLine.Role.APPROVE]
 
 
-def _next_pending_line(doc: Document):
-    # 현재 order에서 처리할 pending 1건
+def _pending_consult_lines(doc: Document):
+    """
+    아직 처리되지 않은 협의 라인 전체
+    협의자는 동시 승인 대상
+    """
     return doc.lines.filter(
-        role__in=_active_roles(),
-        order=doc.current_line_order,
+        role=DocumentLine.Role.CONSULT,
         decision=DocumentLine.Decision.PENDING,
-    ).first()
+    ).order_by("order", "id")
+
+
+def _pending_approve_lines(doc: Document):
+    """
+    아직 처리되지 않은 결재 라인 전체
+    결재자는 순차 승인 대상
+    """
+    return doc.lines.filter(
+        role=DocumentLine.Role.APPROVE,
+        decision=DocumentLine.Decision.PENDING,
+    ).order_by("order", "id")
+
+
+def _current_pending_approve_line(doc: Document):
+    """
+    현재 처리 가능한 결재자 1명
+    = 아직 남아 있는 결재 라인 중 order가 가장 작은 1건
+    """
+    return _pending_approve_lines(doc).first()
+
+
+def _has_active_lines(doc: Document) -> bool:
+    return doc.lines.filter(role__in=_active_roles()).exists()
+
+
+def _recalculate_doc_status_and_order(doc: Document) -> Document:
+    """
+    문서의 현재 진행 상태와 current_line_order를 재계산한다.
+
+    정책:
+    1) 협의 미처리자가 한 명이라도 있으면 협의 단계 진행중
+    2) 협의가 모두 끝났고 결재 미처리자가 있으면 가장 빠른 결재 order 진행중
+    3) 둘 다 없으면 완료
+    """
+    pending_consults = _pending_consult_lines(doc)
+    if pending_consults.exists():
+        first_consult = pending_consults.first()
+        doc.current_line_order = first_consult.order
+        doc.status = Document.Status.IN_PROGRESS
+        doc.save(update_fields=["current_line_order", "status"])
+        return doc
+
+    current_approve = _current_pending_approve_line(doc)
+    if current_approve:
+        doc.current_line_order = current_approve.order
+        doc.status = Document.Status.IN_PROGRESS
+        doc.save(update_fields=["current_line_order", "status"])
+        return doc
+
+    doc.status = Document.Status.COMPLETED
+    doc.save(update_fields=["status"])
+    return doc
+
+
+def _get_actionable_line_for_actor(doc: Document, actor):
+    """
+    현재 actor가 처리할 수 있는 라인을 반환한다.
+
+    정책:
+    - 협의가 하나라도 남아 있으면:
+      -> 협의자는 자기 협의 라인을 동시 처리 가능
+      -> 결재자는 처리 불가
+    - 협의가 모두 끝났으면:
+      -> 현재 순차 결재자 1명만 처리 가능
+    """
+    if actor.is_superuser:
+        pending_consults = _pending_consult_lines(doc)
+        if pending_consults.exists():
+            return pending_consults.filter(user_id=actor.id).first() or pending_consults.first()
+
+        return _current_pending_approve_line(doc)
+
+    pending_consults = _pending_consult_lines(doc)
+    if pending_consults.exists():
+        return pending_consults.filter(user_id=actor.id).first()
+
+    current_approve = _current_pending_approve_line(doc)
+    if current_approve and current_approve.user_id == actor.id:
+        return current_approve
+
+    return None
 
 
 @transaction.atomic
@@ -47,40 +130,49 @@ def create_document_with_lines_and_files(
     )
 
     order = 1
+
+    # 협의자: 동시 승인 대상이므로 모두 같은 단계로 보아도 되지만
+    # 현재 구조에서는 기존 order 유지 가능.
+    # 진행 판단은 "CONSULT 전체 pending 존재 여부"로 한다.
     for u in consultants:
         DocumentLine.objects.create(
-            document=doc, role=DocumentLine.Role.CONSULT, order=order, user=u
+            document=doc,
+            role=DocumentLine.Role.CONSULT,
+            order=order,
+            user=u,
         )
         order += 1
 
+    # 결재자: 순차 승인
     for u in approvers:
         DocumentLine.objects.create(
-            document=doc, role=DocumentLine.Role.APPROVE, order=order, user=u
+            document=doc,
+            role=DocumentLine.Role.APPROVE,
+            order=order,
+            user=u,
         )
         order += 1
 
+    # 수신자: 완료 후 열람
     for u in receivers:
         DocumentLine.objects.create(
-            document=doc, role=DocumentLine.Role.RECEIVE, order=order, user=u
+            document=doc,
+            role=DocumentLine.Role.RECEIVE,
+            order=order,
+            user=u,
         )
         order += 1
 
     for f in files:
         Attachment.objects.create(document=doc, file=f, uploaded_by=creator)
 
-    if doc.lines.filter(role__in=_active_roles()).exists():
-        doc.status = Document.Status.IN_PROGRESS
+    if _has_active_lines(doc):
+        _recalculate_doc_status_and_order(doc)
     else:
         doc.status = Document.Status.COMPLETED
+        doc.save(update_fields=["status"])
 
-    doc.save(update_fields=["status"])
-
-    # ✅ 상신 알림(협의자+결재자): notify.py 시그니처에 맞춤
     notify_on_submit(request=request, doc=doc, user=creator)
-
-    # ✅ 결재자가 없어서 즉시 완료라면 완료 알림
-    if doc.status == Document.Status.COMPLETED:
-        notify_on_completed(request=request, doc=doc, user=creator)
 
     return doc
 
@@ -93,9 +185,9 @@ def approve_or_consult(
     comment: str = "",
     request=None,
 ) -> Document:
-    line = _next_pending_line(doc)
+    line = _get_actionable_line_for_actor(doc, actor)
     if not line:
-        return doc
+        raise PermissionError("처리 권한이 없습니다.")
 
     if line.user_id != actor.id and not actor.is_superuser:
         raise PermissionError("처리 권한이 없습니다.")
@@ -105,17 +197,8 @@ def approve_or_consult(
     line.acted_at = timezone.now()
     line.save(update_fields=["decision", "comment", "acted_at"])
 
-    doc.current_line_order += 1
+    _recalculate_doc_status_and_order(doc)
 
-    # 다음 라인이 없으면 완료
-    if _next_pending_line(doc) is None:
-        doc.status = Document.Status.COMPLETED
-    else:
-        doc.status = Document.Status.IN_PROGRESS
-
-    doc.save(update_fields=["current_line_order", "status"])
-
-    # ✅ 다음 처리자 알림(또는 완료 알림): notify.py 시그니처에 맞춤
     notify_on_line_approved(request=request, doc=doc, user=actor)
 
     return doc
@@ -129,9 +212,9 @@ def reject(
     comment: str,
     request=None,
 ) -> Document:
-    line = _next_pending_line(doc)
+    line = _get_actionable_line_for_actor(doc, actor)
     if not line:
-        return doc
+        raise PermissionError("처리 권한이 없습니다.")
 
     if line.user_id != actor.id and not actor.is_superuser:
         raise PermissionError("처리 권한이 없습니다.")
@@ -144,11 +227,10 @@ def reject(
     doc.status = Document.Status.REJECTED
     doc.save(update_fields=["status"])
 
-    # ✅ 반려 알림(상신자): notify.py 시그니처에 맞춤
     notify_on_rejected(
         request=request,
         doc=doc,
-        user=getattr(doc, "created_by", None),
+        user=actor,
         reason=(comment or "")[:300],
     )
 

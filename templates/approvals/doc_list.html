@@ -9,12 +9,10 @@
       <a class="btn btn-primary" href="{% url 'approvals:doc_create' %}">문서 상신</a>
     </div>
 
-    <!-- ✅ CSV 저장 버튼 (각 문서함별) -->
     <div class="row" style="margin-top:12px; gap:8px; flex-wrap:wrap;">
       {% if csv_export_url and csv_kind %}
         <a class="btn" href="{% url csv_export_url csv_kind %}">CSV 저장</a>
       {% elif title == "내 문서함" %}
-        <!-- 구버전 호환(혹시 컨텍스트가 없을 때) -->
         <a class="btn" href="{% url 'approvals:documents_export_csv' %}">CSV 저장</a>
       {% endif %}
     </div>
@@ -40,31 +38,21 @@
         <tbody>
         {% for doc in docs %}
           <tr>
-            <td><span class="badge">{{ doc.get_status_display }}</span></td>
+            <td>
+              <span class="badge">{{ doc.get_status_display }}</span>
+            </td>
 
             <td>
               <a href="{% url 'approvals:doc_detail' doc.id %}" style="display:inline-block;">
                 {{ doc.title }}
               </a>
+
               <div class="muted" style="font-size:12px; margin-top:4px;">
                 문서번호 {{ doc.id }} ·
-                {% if doc.status == "COMPLETED" %}
-                  결재 완료
-                {% elif doc.status == "REJECTED" %}
-                  반려됨
-                {% elif doc.status == "IN_PROGRESS" %}
-                  {{ doc.current_line_order }}번째 단계 진행 중
-                {% elif doc.status == "SUBMITTED" %}
-                  접수됨
-                {% elif doc.status == "DRAFT" %}
-                  임시 저장
-                {% else %}
-                  진행 상태 확인 필요
-                {% endif %}
+                {{ doc.progress_text|default:"진행 상태 확인 필요" }}
               </div>
             </td>
 
-            <!-- ✅ Profile 이름 우선 표시 (태그/필터 없이 안전 처리) -->
             <td>
               {% if doc.created_by and doc.created_by.profile and doc.created_by.profile.display_name %}
                 {{ doc.created_by.profile.display_name }}

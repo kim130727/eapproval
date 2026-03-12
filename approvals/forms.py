@@ -10,7 +10,7 @@ from .permissions import CHAIR_GROUP  # 프로젝트 표준: "CHAIR"
 
 User = get_user_model()
 
-# ✅ 파일 1개당 2MB 제한
+# 파일 1개당 2MB 제한
 MAX_FILE_SIZE = 2 * 1024 * 1024  # 2MB
 
 
@@ -23,14 +23,23 @@ def user_label(u) -> str:
     """
     profile = getattr(u, "profile", None)
     if profile and hasattr(profile, "display_name"):
-        return profile.display_name()
+        try:
+            name = profile.display_name()
+            if name:
+                return name
+        except Exception:
+            pass
+
     if profile and getattr(profile, "full_name", ""):
-        return profile.full_name
+        name = (profile.full_name or "").strip()
+        if name:
+            return name
+
     return u.username
 
 
 def chair_users_queryset():
-    """✅ '위원장' 그룹(CHAIR_GROUP)에 속한 사용자만 반환"""
+    """'위원장' 그룹(CHAIR_GROUP)에 속한 사용자만 반환"""
     return User.objects.filter(is_active=True, groups__name=CHAIR_GROUP).distinct()
 
 
@@ -39,7 +48,7 @@ class MultipleFileInput(forms.ClearableFileInput):
 
     def __init__(self, attrs=None):
         attrs = attrs or {}
-        attrs["multiple"] = True  # ✅ 스마트폰에서도 다중 선택 가능하도록 강제
+        attrs["multiple"] = True
         super().__init__(attrs)
 
 
@@ -57,7 +66,6 @@ class MultipleFileField(forms.FileField):
         for f in files:
             f = parent_clean(f, initial)
 
-            # ✅ 파일 1개당 2MB 제한
             if getattr(f, "size", 0) > MAX_FILE_SIZE:
                 size_mb = round(f.size / 1024 / 1024, 2)
                 raise ValidationError(f"[{f.name}] 파일이 2MB를 초과했습니다. (현재: {size_mb}MB)")
@@ -68,46 +76,46 @@ class MultipleFileField(forms.FileField):
 
 
 class DocumentForm(forms.ModelForm):
-    # ✅ 중복 제출 방지 토큰
     submit_token = forms.CharField(required=False, widget=forms.HiddenInput)
 
     consultants = forms.ModelMultipleChoiceField(
         queryset=User.objects.none(),
-        required=False,  # ✅ 협의자: 선택
+        required=False,
         widget=forms.CheckboxSelectMultiple,
         label="협의자(여러 명 가능)",
-        help_text="체크 후 ↕️ 드래그로 순서를 바꾸면 결재 순서로 저장됩니다.",
+        help_text="여러 명을 선택하면 동시에 협의가 진행됩니다.",
     )
+
     approvers = forms.ModelMultipleChoiceField(
         queryset=User.objects.none(),
-        required=True,  # ✅ 결재자: 필수 (그대로)
+        required=True,
         widget=forms.CheckboxSelectMultiple,
-        label="결재자(드래그로 순서 변경 가능)",
-        help_text="체크 후 ↕️ 드래그로 순서를 바꾸면 결재 순서로 저장됩니다.",
+        label="결재자(순서대로 진행)",
+        help_text="체크 후 오른쪽 ↕️ 핸들을 드래그하면 결재 순서대로 저장됩니다.",
     )
+
     receivers = forms.ModelMultipleChoiceField(
         queryset=User.objects.none(),
-        required=False,  # ✅ 수신/열람자: 선택
+        required=False,
         widget=forms.CheckboxSelectMultiple,
         label="수신/열람자(여러 명 가능)",
-        help_text="체크 후 ↕️ 드래그로 순서를 바꾸면 결재 순서로 저장됩니다.",
+        help_text="문서 완료 후 열람 대상자입니다.",
     )
 
-    # ✅ 선택 순서 저장용(프론트 JS가 콤마로 넣어줌)
     approvers_order = forms.CharField(required=False, widget=forms.HiddenInput)
 
-    # ✅ 첨부파일(여러 개 가능 + 1개당 2MB 제한은 MultipleFileField.clean에서 처리)
     files = MultipleFileField(required=False, label="첨부파일(여러 개 가능)")
 
     class Meta:
         model = Document
-        fields = ("title", "content")  # approvers_order는 모델필드 아님(폼만)
-        widgets = {"content": forms.Textarea(attrs={"rows": 8})}
+        fields = ("title", "content")
+        widgets = {
+            "content": forms.Textarea(attrs={"rows": 8}),
+        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        # ✅ 폼이 렌더링될 때 기본 토큰 생성(없을 때만)
         if not self.initial.get("submit_token"):
             self.initial["submit_token"] = uuid.uuid4().hex
 
@@ -120,12 +128,13 @@ class DocumentForm(forms.ModelForm):
     def _parse_order_ids(self, raw: str) -> list[int]:
         if not raw:
             return []
+
         parts = [p.strip() for p in raw.split(",") if p.strip()]
         ids: list[int] = []
         for p in parts:
             if p.isdigit():
                 ids.append(int(p))
-        # 중복 제거(순서 유지)
+
         seen = set()
         dedup = []
         for i in ids:
@@ -137,42 +146,35 @@ class DocumentForm(forms.ModelForm):
 
     def clean(self):
         """
-        ✅ 1) 위원장 아닌 유저 차단(기존)
-        ✅ 2) approvers는 "선택한 순서대로" 서버에서 재정렬
+        1) 위원장 아닌 유저 차단
+        2) approvers는 선택한 순서대로 서버에서 재정렬
         """
         cleaned = super().clean()
 
         allowed_ids = set(chair_users_queryset().values_list("id", flat=True))
 
-        # --- 서버단 권한 차단(기존 로직 유지) ---
         for fname in ("consultants", "approvers", "receivers"):
             selected = cleaned.get(fname)
             if not selected:
                 continue
+
             selected_ids = {u.id for u in selected}
             if not selected_ids.issubset(allowed_ids):
                 self.add_error(fname, "위원장만 선택할 수 있습니다.")
                 return cleaned
 
-        # --- ✅ approvers 순서 보장 ---
         selected_approvers = cleaned.get("approvers")
         if selected_approvers:
             selected_ids = [u.id for u in selected_approvers]
-
             order_ids = self._parse_order_ids(cleaned.get("approvers_order", ""))
 
-            # order_ids가 없거나/불일치하면 -> 현재 선택 집합 기준으로 안전 fallback
             if order_ids:
-                # order_ids 중에서 "실제 선택된 결재자"만 남기기
                 ordered = [i for i in order_ids if i in selected_ids]
-
-                # 사용자가 선택했는데 order_ids에 누락된 결재자는 뒤에 붙임
                 tail = [i for i in selected_ids if i not in ordered]
                 final_ids = ordered + tail
             else:
-                final_ids = selected_ids  # fallback
+                final_ids = selected_ids
 
-            # id -> user 매핑 후 순서대로 list로 만들기
             by_id = {u.id: u for u in selected_approvers}
             cleaned["approvers"] = [by_id[i] for i in final_ids if i in by_id]
 

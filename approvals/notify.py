@@ -22,7 +22,7 @@ class Recipient:
 
 def _display_name(user) -> str:
     """
-    ✅ 표시 이름 우선순위:
+    표시 이름 우선순위:
     1) user.profile.display_name()
     2) user.profile.full_name
     3) user.get_full_name()
@@ -62,11 +62,12 @@ def _get_user_email(user) -> str:
 def _iter_recipients(users: Iterable[object]) -> list[Recipient]:
     recips: list[Recipient] = []
     for u in users:
+        if not u:
+            continue
         email = _get_user_email(u)
         if email:
             recips.append(Recipient(user=u, email=email))
 
-    # 이메일 중복 제거
     seen: set[str] = set()
     uniq: list[Recipient] = []
     for r in recips:
@@ -78,14 +79,11 @@ def _iter_recipients(users: Iterable[object]) -> list[Recipient]:
 
 
 def _doc_url(doc: Document, request=None) -> str:
-    # URLconf 기준으로 상세 URL 생성
     path = reverse("approvals:doc_detail", kwargs={"doc_id": doc.pk})
 
-    # request 있으면 절대 URL로
     if request:
         return request.build_absolute_uri(path)
 
-    # request 없으면 settings의 SITE_BASE_URL 사용
     base = getattr(settings, "SITE_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
     return f"{base}{path}"
 
@@ -120,68 +118,105 @@ def _send_email(subject: str, body: str, to_emails: list[str]) -> None:
                 fail_silently=True,
             )
         except Exception:
-            # 알림 실패가 결재 플로우를 막지 않도록 무시
             pass
 
-    # 요청 응답을 막지 않도록 백그라운드로 발송
     threading.Thread(target=_job, daemon=True).start()
 
 
-def _active_roles():
-    return [DocumentLine.Role.CONSULT, DocumentLine.Role.APPROVE]
-
-
-def _pending_active_lines(doc: Document):
+def _pending_consult_lines(doc: Document):
     return doc.lines.filter(
-        role__in=_active_roles(),
+        role=DocumentLine.Role.CONSULT,
         decision=DocumentLine.Decision.PENDING,
-    ).order_by("order")
+    ).order_by("order", "id")
 
 
-def _current_pending_line(doc: Document):
+def _pending_approve_lines(doc: Document):
     return doc.lines.filter(
-        role__in=_active_roles(),
-        order=doc.current_line_order,
+        role=DocumentLine.Role.APPROVE,
         decision=DocumentLine.Decision.PENDING,
-    ).first()
+    ).order_by("order", "id")
+
+
+def _current_pending_approve_line(doc: Document):
+    return _pending_approve_lines(doc).first()
+
+
+def _receive_lines(doc: Document):
+    return doc.lines.filter(role=DocumentLine.Role.RECEIVE).order_by("order", "id")
 
 
 def notify_on_submit(*, request=None, doc: Document, user=None) -> None:
     """
-    ✅ 상신 알림: 협의자+결재자(활성 라인)의 '전체'에게 알림.
+    상신 시 알림 정책:
+    1) 협의자가 있으면 협의자 전체에게 알림
+    2) 협의자가 없고 결재자가 있으면 첫 결재자에게 알림
+    3) 둘 다 없으면 완료 알림
     """
     url = _doc_url(doc, request=request)
-    pending = _pending_active_lines(doc)
-    recipients = _iter_recipients([ln.user for ln in pending])
-
     creator_name = _display_name(getattr(doc, "created_by", None))
 
-    subject = f"[전자결재] 상신: {doc.title}"
-    body = (
-        f"문서가 상신되었습니다.\n\n"
-        f"제목: {doc.title}\n"
-        f"상신자: {creator_name}\n"
-        f"링크: {url}"
-    )
+    pending_consults = _pending_consult_lines(doc)
+    if pending_consults.exists():
+        recipients = _iter_recipients([ln.user for ln in pending_consults])
 
-    _toast(request, "info", f"상신 처리되었습니다. ({doc.title})")
-    _send_email(subject, body, [r.email for r in recipients])
+        subject = f"[전자결재] 협의 요청: {doc.title}"
+        body = (
+            f"문서가 상신되어 협의가 시작되었습니다.\n\n"
+            f"제목: {doc.title}\n"
+            f"상신자: {creator_name}\n"
+            f"처리 단계: 협의\n"
+            f"링크: {url}"
+        )
+
+        _toast(request, "info", f"상신 처리되었습니다. 협의자들에게 알림을 보냈습니다. ({doc.title})")
+        _send_email(subject, body, [r.email for r in recipients])
+        return
+
+    next_approve = _current_pending_approve_line(doc)
+    if next_approve:
+        recipients = _iter_recipients([next_approve.user])
+        next_name = _display_name(next_approve.user)
+
+        subject = f"[전자결재] 결재 요청: {doc.title}"
+        body = (
+            f"문서가 상신되어 결재가 시작되었습니다.\n\n"
+            f"제목: {doc.title}\n"
+            f"상신자: {creator_name}\n"
+            f"현재 결재자: {next_name}\n"
+            f"링크: {url}"
+        )
+
+        _toast(request, "info", f"상신 처리되었습니다. 첫 결재자에게 알림을 보냈습니다. ({doc.title})")
+        _send_email(subject, body, [r.email for r in recipients])
+        return
+
+    notify_on_completed(request=request, doc=doc, user=getattr(doc, "created_by", None))
 
 
 def notify_on_line_approved(*, request=None, doc: Document, user) -> None:
     """
-    ✅ 라인 승인/협의 완료 알림:
-    - 다음 처리자(다음 pending 라인)에게 알림
-    - 다음 라인이 없으면 완료 알림(상신자)
+    승인/협의 완료 후 알림 정책:
+    1) 아직 협의가 남아 있으면 추가 알림 없음
+       (남은 협의자들은 이미 상신 시 안내받음)
+    2) 협의가 모두 끝났고 결재자가 남아 있으면 첫/다음 결재자에게 알림
+    3) 더 이상 처리자가 없으면 완료 알림
     """
     url = _doc_url(doc, request=request)
-    next_line = _current_pending_line(doc)
-
     actor_name = _display_name(user)
 
+    pending_consults = _pending_consult_lines(doc)
+    if pending_consults.exists():
+        remaining_count = pending_consults.count()
+        _toast(
+            request,
+            "info",
+            f"처리되었습니다. 남은 협의자 {remaining_count}명이 있습니다. ({doc.title})",
+        )
+        return
+
+    next_line = _current_pending_approve_line(doc)
     if next_line:
         recipients = _iter_recipients([next_line.user])
-
         next_name = _display_name(next_line.user)
 
         subject = f"[전자결재] 처리 요청: {doc.title}"
@@ -189,28 +224,32 @@ def notify_on_line_approved(*, request=None, doc: Document, user) -> None:
             f"이전 단계가 처리되었습니다.\n\n"
             f"문서: {doc.title}\n"
             f"처리자: {actor_name}\n"
+            f"현재 단계: 결재\n"
             f"다음 처리자: {next_name}\n"
             f"링크: {url}"
         )
-        _toast(request, "info", f"다음 처리자에게 알림을 보냈습니다. ({doc.title})")
+
+        _toast(request, "info", f"다음 결재자에게 알림을 보냈습니다. ({doc.title})")
         _send_email(subject, body, [r.email for r in recipients])
         return
 
-    # ✅ 다음 라인이 없으면 완료 알림(상신자)
     notify_on_completed(request=request, doc=doc, user=getattr(doc, "created_by", None))
 
 
 def notify_on_completed(*, request=None, doc: Document, user=None) -> None:
     """
-    ✅ 완료 알림: 기본은 상신자(creator)에게.
-    user를 넘기면 그 사용자에게도/또는 대체로 보낼 수 있음.
+    완료 알림:
+    - 기본은 상신자에게 발송
+    - 수신자가 있으면 함께 안내 가능
     """
     url = _doc_url(doc, request=request)
 
-    target = user or getattr(doc, "created_by", None)
-    recipients = _iter_recipients([target] if target else [])
+    creator = getattr(doc, "created_by", None)
+    target = user or creator
+    receive_users = [ln.user for ln in _receive_lines(doc)]
+    recipients = _iter_recipients(([target] if target else []) + receive_users)
 
-    creator_name = _display_name(getattr(doc, "created_by", None))
+    creator_name = _display_name(creator)
 
     subject = f"[전자결재] 완료: {doc.title}"
     body = (
@@ -226,7 +265,8 @@ def notify_on_completed(*, request=None, doc: Document, user=None) -> None:
 
 def notify_on_rejected(*, request=None, doc: Document, user, reason: str) -> None:
     """
-    ✅ 반려 알림: 기본은 상신자(created_by)에게.
+    반려 알림:
+    - 기본은 상신자에게 발송
     """
     url = _doc_url(doc, request=request)
     reason = (reason or "").strip()
