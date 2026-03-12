@@ -81,6 +81,7 @@
   order: 1;
   flex: 1;
   min-width: 0;
+  cursor: default;
 }
 
 /* ✅ 핸들을 오른쪽으로 이동 */
@@ -92,12 +93,7 @@
 
 /* ✅ 결재자: 체크된 항목은 카드에서도 드래그 느낌(커서) */
 #approversBox label.is-checked {
-  cursor: grab;
-}
-
-/* ✅ 결재자: 체크된 항목은 카드에서도 드래그 느낌(커서) */
-#approversBox label.is-checked {
-  cursor: grab;
+  cursor: default;
 }
 
 /* 드래그 핸들 */
@@ -111,12 +107,13 @@
   border-radius: 12px;
   background: #f9fafb;
   cursor: grab;
-
-  /* 모바일 터치 드래그 핵심 */
   touch-action: none;
 }
 
-.drag-handle:active { cursor: grabbing; }
+
+.drag-handle:active {
+  cursor: grabbing;
+}
 
 /* ✅ 드래그 중 시각/터치 충돌 최소화 */
 #approversBox li.dragging {

@@ -7,12 +7,13 @@ document.addEventListener("DOMContentLoaded", function () {
     qsa(box, 'input[type="checkbox"]').forEach((cb) => {
       const label = cb.closest("label");
       if (!label) return;
+
       label.classList.toggle("is-checked", cb.checked);
 
       const li = cb.closest("li");
       if (li) li.classList.toggle("is-checked", cb.checked);
 
-      // ✅ 체크된 항목만 핸들 활성/표시
+      // 체크된 항목만 핸들 활성/표시
       const handle = li ? li.querySelector(".drag-handle") : null;
       if (handle) {
         handle.style.visibility = cb.checked ? "visible" : "hidden";
@@ -23,7 +24,6 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function getCheckedIdsInDomOrder(box) {
-    // ✅ DOM 순서대로 체크된 value만
     const ids = [];
     qsa(box, "li").forEach((li) => {
       const cb = li.querySelector('input[type="checkbox"]');
@@ -35,33 +35,30 @@ document.addEventListener("DOMContentLoaded", function () {
   function setupSimpleBox(boxId) {
     const box = document.getElementById(boxId);
     if (!box) return;
+
     syncCheckedClass(box);
-    box.addEventListener("change", () => syncCheckedClass(box));
+    box.addEventListener("change", function () {
+      syncCheckedClass(box);
+    });
   }
 
-  // ✅ Django가 어떤 형태로 렌더하든, approversBox 내부를 <ul><li> 구조로 표준화
+  // Django가 어떤 형태로 렌더하든 approversBox 내부를 <ul><li> 구조로 표준화
   function normalizeToUlLi(box) {
-    // 이미 ul이 있으면 그대로 사용
     let ul = box.querySelector("ul");
     if (ul) return ul;
 
-    // checkbox들을 기준으로 label 단위로 li를 만든다
     const checkboxes = qsa(box, 'input[type="checkbox"]');
     if (checkboxes.length === 0) return null;
 
     ul = document.createElement("ul");
 
-    // label을 기준으로 묶기 (Django checkboxselectmultiple은 보통 label이 있음)
     checkboxes.forEach((cb) => {
       const label = cb.closest("label") || cb.parentElement;
 
       const li = document.createElement("li");
-      // label이 box 바깥에 있을 수도 있으니, 안전하게 clone 대신 "이동"시킴
-      // (이동해도 form submit에는 영향 없음)
       if (label) {
         li.appendChild(label);
       } else {
-        // label을 못찾으면 cb 자체를 감싼다
         const fallback = document.createElement("label");
         fallback.appendChild(cb);
         li.appendChild(fallback);
@@ -69,7 +66,6 @@ document.addEventListener("DOMContentLoaded", function () {
       ul.appendChild(li);
     });
 
-    // box 내용을 ul로 교체
     box.innerHTML = "";
     box.appendChild(ul);
     return ul;
@@ -83,7 +79,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const ul = normalizeToUlLi(box);
     if (!ul) return;
 
-    // ✅ li 맨 앞에 handle을 넣는다 (label 밖!)
+    // li 맨 앞에 handle 삽입
     qsa(ul, "li").forEach((li) => {
       if (li.querySelector(".drag-handle")) return;
 
@@ -91,11 +87,12 @@ document.addEventListener("DOMContentLoaded", function () {
       handle.className = "drag-handle";
       handle.textContent = "↕️";
       handle.setAttribute("aria-label", "드래그로 순서 변경");
+      handle.setAttribute("role", "button");
+      handle.setAttribute("tabindex", "0");
 
       li.insertBefore(handle, li.firstChild);
     });
 
-    // 초기 상태
     syncCheckedClass(box);
     hidden.value = getCheckedIdsInDomOrder(box).join(",");
 
@@ -109,12 +106,17 @@ document.addEventListener("DOMContentLoaded", function () {
 
     let draggingLi = null;
     let placeholder = null;
+    let isDragging = false;
 
     function makePlaceholder(heightPx) {
       const ph = document.createElement("li");
       ph.className = "placeholder";
       ph.style.height = heightPx + "px";
       return ph;
+    }
+
+    function clearDanglingPlaceholder() {
+      qsa(ul, "li.placeholder").forEach((el) => el.remove());
     }
 
     function getLiUnderPointer(clientY) {
@@ -129,17 +131,26 @@ document.addEventListener("DOMContentLoaded", function () {
 
     function onPointerMove(e) {
       if (!draggingLi || !placeholder) return;
-
-      // ✅ 드래그 중 스크롤 방지(특히 모바일)
       if (e.cancelable) e.preventDefault();
 
       const targetLi = getLiUnderPointer(e.clientY);
-      if (targetLi) ul.insertBefore(placeholder, targetLi);
-      else ul.appendChild(placeholder);
+      if (targetLi) {
+        ul.insertBefore(placeholder, targetLi);
+      } else {
+        ul.appendChild(placeholder);
+      }
     }
 
     function endDrag() {
-      if (!draggingLi || !placeholder) return;
+      if (!draggingLi || !placeholder) {
+        isDragging = false;
+        draggingLi = null;
+        if (placeholder) {
+          placeholder.remove();
+          placeholder = null;
+        }
+        return;
+      }
 
       draggingLi.classList.remove("dragging");
       ul.insertBefore(draggingLi, placeholder);
@@ -147,6 +158,21 @@ document.addEventListener("DOMContentLoaded", function () {
 
       draggingLi = null;
       placeholder = null;
+      isDragging = false;
+
+      hidden.value = getCheckedIdsInDomOrder(box).join(",");
+    }
+
+    function cancelDrag() {
+      if (draggingLi) {
+        draggingLi.classList.remove("dragging");
+      }
+      if (placeholder) {
+        placeholder.remove();
+      }
+      draggingLi = null;
+      placeholder = null;
+      isDragging = false;
 
       hidden.value = getCheckedIdsInDomOrder(box).join(",");
     }
@@ -158,11 +184,15 @@ document.addEventListener("DOMContentLoaded", function () {
 
     function startDragFromEvent(e, li, captureEl) {
       if (!li) return;
+      if (isDragging) return;
 
-      // ✅ "체크된 항목만" 드래그 허용
+      // 체크된 항목만 드래그 가능
       if (!isCheckedLi(li)) return;
 
+      clearDanglingPlaceholder();
+
       draggingLi = li;
+      isDragging = true;
       draggingLi.classList.add("dragging");
 
       const rect = li.getBoundingClientRect();
@@ -178,68 +208,77 @@ document.addEventListener("DOMContentLoaded", function () {
         } catch (_) {}
       }
 
-      const moveEvt = window.PointerEvent ? "pointermove" : e.touches ? "touchmove" : "mousemove";
-      const upEvt = window.PointerEvent ? "pointerup" : e.touches ? "touchend" : "mouseup";
+      const moveEvt = window.PointerEvent
+        ? "pointermove"
+        : e.touches
+        ? "touchmove"
+        : "mousemove";
+
+      const upEvt = window.PointerEvent
+        ? "pointerup"
+        : e.touches
+        ? "touchend"
+        : "mouseup";
+
+      const cancelEvt = window.PointerEvent
+        ? "pointercancel"
+        : e.touches
+        ? "touchcancel"
+        : null;
 
       function moveHandler(ev) {
-        if (ev.touches && ev.touches[0]) ev.clientY = ev.touches[0].clientY;
+        if (ev.touches && ev.touches[0]) {
+          ev.clientY = ev.touches[0].clientY;
+        }
         onPointerMove(ev);
       }
 
-      function upHandler() {
+      function cleanup(useCancel) {
         document.removeEventListener(moveEvt, moveHandler);
         document.removeEventListener(upEvt, upHandler);
-        endDrag();
+        if (cancelEvt) {
+          document.removeEventListener(cancelEvt, cancelHandler);
+        }
+
+        if (useCancel) {
+          cancelDrag();
+        } else {
+          endDrag();
+        }
+      }
+
+      function upHandler() {
+        cleanup(false);
+      }
+
+      function cancelHandler() {
+        cleanup(true);
       }
 
       document.addEventListener(moveEvt, moveHandler, { passive: false });
       document.addEventListener(upEvt, upHandler, { passive: false });
+      if (cancelEvt) {
+        document.addEventListener(cancelEvt, cancelHandler, { passive: false });
+      }
     }
 
     function bindDragStarters() {
-      // ✅ 1) 핸들에서만 드래그 시작 (체크된 경우에만 핸들이 활성화됨)
+      // 핸들에서만 드래그 시작
       qsa(ul, ".drag-handle").forEach((handle) => {
         handle.addEventListener("pointerdown", function (e) {
-          startDragFromEvent(e, e.target.closest("li"), handle);
+          startDragFromEvent(e, e.currentTarget.closest("li"), handle);
         });
 
-        // pointer 없는 환경 fallback
         handle.addEventListener("mousedown", function (e) {
           if (window.PointerEvent) return;
-          startDragFromEvent(e, e.target.closest("li"), handle);
+          startDragFromEvent(e, e.currentTarget.closest("li"), handle);
         });
 
         handle.addEventListener(
           "touchstart",
           function (e) {
             if (window.PointerEvent) return;
-            startDragFromEvent(e, e.target.closest("li"), handle);
-          },
-          { passive: false }
-        );
-      });
-
-      // ✅ 2) 카드(label)에서도 드래그 시작 가능 (단, 체크박스 클릭은 제외)
-      qsa(ul, "li > label").forEach((label) => {
-        function guardStart(e) {
-          if (e.target && e.target.matches('input[type="checkbox"]')) return;
-          startDragFromEvent(e, e.target.closest("li"), label);
-        }
-
-        label.addEventListener("pointerdown", function (e) {
-          guardStart(e);
-        });
-
-        label.addEventListener("mousedown", function (e) {
-          if (window.PointerEvent) return;
-          guardStart(e);
-        });
-
-        label.addEventListener(
-          "touchstart",
-          function (e) {
-            if (window.PointerEvent) return;
-            guardStart(e);
+            startDragFromEvent(e, e.currentTarget.closest("li"), handle);
           },
           { passive: false }
         );
@@ -251,6 +290,10 @@ document.addEventListener("DOMContentLoaded", function () {
     const form = box.closest("form");
     if (form) {
       form.addEventListener("submit", function () {
+        clearDanglingPlaceholder();
+        if (draggingLi) {
+          cancelDrag();
+        }
         hidden.value = getCheckedIdsInDomOrder(box).join(",");
       });
     }
@@ -258,10 +301,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
   setupSimpleBox("consultantsBox");
   setupSimpleBox("receiversBox");
-
   setupApproversPointerSort("approversBox", "id_approvers_order");
 
-  // ✅ 상신 버튼 연타 방지 + 로딩 표시
+  // 상신 버튼 연타 방지 + 로딩 표시
   const formEl = document.querySelector("form[enctype='multipart/form-data']");
   const btn = document.getElementById("submitBtn");
   const txt = document.getElementById("submitText");
@@ -269,6 +311,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   if (formEl && btn) {
     let submitting = false;
+
     formEl.addEventListener("submit", function () {
       if (submitting) return false;
       submitting = true;
@@ -276,6 +319,7 @@ document.addEventListener("DOMContentLoaded", function () {
       btn.disabled = true;
       btn.style.opacity = "0.7";
       btn.style.cursor = "not-allowed";
+
       if (txt) txt.textContent = "상신 중...";
       if (sp) sp.style.display = "inline";
     });
