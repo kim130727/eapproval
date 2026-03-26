@@ -261,4 +261,30 @@
 </div>
 {% endif %}
 
+{% if can_withdraw or can_redraft %}
+<div class="card" style="margin-top:14px;">
+  <h3 style="margin-top:0;">기안자 작업</h3>
+  <div class="muted" style="margin-bottom:10px;">
+    {% if can_withdraw %}
+      상신된 문서를 회수해 임시 저장으로 돌릴 수 있습니다.
+    {% elif can_redraft %}
+      회수한 문서를 다시 상신할 수 있습니다.
+    {% endif %}
+  </div>
+
+  <div class="row" style="gap:8px; flex-wrap:wrap;">
+    {% if can_withdraw %}
+      <form method="post" action="{% url 'approvals:act_withdraw' doc.id %}">
+        {% csrf_token %}
+        <button class="btn btn-danger" type="submit">회수</button>
+      </form>
+    {% endif %}
+
+    {% if can_redraft %}
+      <a class="btn btn-primary" href="{% url 'approvals:doc_redraft' doc.id %}">수정 후 재기안</a>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
 {% endblock %}

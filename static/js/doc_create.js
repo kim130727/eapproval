@@ -94,7 +94,9 @@ document.addEventListener("DOMContentLoaded", function () {
     });
 
     syncCheckedClass(box);
-    hidden.value = getCheckedIdsInDomOrder(box).join(",");
+    if (!hidden.value) {
+      hidden.value = getCheckedIdsInDomOrder(box).join(",");
+    }
 
     box.addEventListener("change", function (e) {
       const t = e.target;
@@ -308,19 +310,42 @@ document.addEventListener("DOMContentLoaded", function () {
   const btn = document.getElementById("submitBtn");
   const txt = document.getElementById("submitText");
   const sp = document.getElementById("submitSpinner");
+  const requestedActionInput = document.getElementById("id_requested_action");
+  let clickedSubmitter = null;
 
   if (formEl && btn) {
     let submitting = false;
+    let submitLabel = txt ? txt.textContent : "";
 
-    formEl.addEventListener("submit", function () {
+    formEl.querySelectorAll('button[type="submit"]').forEach((submitEl) => {
+      submitEl.addEventListener("click", function () {
+        clickedSubmitter = submitEl;
+
+        if (requestedActionInput) {
+          requestedActionInput.value = submitEl.value || "";
+        }
+
+        const customText = submitEl.getAttribute("data-submitting-text");
+        if (customText) {
+          submitLabel = customText;
+        }
+      });
+    });
+
+    formEl.addEventListener("submit", function (e) {
       if (submitting) return false;
       submitting = true;
+
+      const submitter = e.submitter || clickedSubmitter;
+      if (requestedActionInput && submitter && submitter.value) {
+        requestedActionInput.value = submitter.value;
+      }
 
       btn.disabled = true;
       btn.style.opacity = "0.7";
       btn.style.cursor = "not-allowed";
 
-      if (txt) txt.textContent = "상신 중...";
+      if (txt) txt.textContent = submitLabel || "상신 중...";
       if (sp) sp.style.display = "inline";
     });
   }

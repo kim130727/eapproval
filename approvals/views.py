@@ -18,7 +18,16 @@ from .forms import DocumentForm
 from .models import Attachment, Document, DocumentLine
 from .permissions import CHAIR_GROUP, can_view_document, is_chair
 from .selectors import inbox_pending, my_documents, received_docs, completed_docs, rejected_docs
-from .services import approve_or_consult, create_document_with_lines_and_files, mark_read, reject
+from .services import (
+    approve_or_consult,
+    create_document_with_lines_and_files,
+    delete_draft_attachment,
+    mark_read,
+    redraft_document,
+    reject,
+    update_draft_document,
+    withdraw_document,
+)
 
 User = get_user_model()
 
@@ -152,6 +161,14 @@ def _attach_progress_text(docs):
     for doc in docs:
         doc.progress_text = _list_progress_text(doc)
     return docs
+
+
+def _line_user_ids_by_role(doc: Document, role: str) -> list[int]:
+    return list(
+        doc.lines.filter(role=role)
+        .order_by("order", "id")
+        .values_list("user_id", flat=True)
+    )
 
 
 @login_required
@@ -301,6 +318,7 @@ def doc_detail(request, doc_id: int):
         mark_read(doc=doc, actor=request.user)
 
     stage_info = _get_current_stage_info(doc, request.user)
+    is_owner = doc.created_by_id == request.user.id or request.user.is_superuser
 
     return render(
         request,
@@ -312,6 +330,11 @@ def doc_detail(request, doc_id: int):
             "current_lines": stage_info["current_lines"],
             "current_line": stage_info["current_line"],
             "can_act": stage_info["can_act"],
+            "can_withdraw": is_owner
+            and doc.status
+            in {Document.Status.SUBMITTED, Document.Status.IN_PROGRESS, Document.Status.REJECTED},
+            "can_redraft": is_owner and doc.status == Document.Status.DRAFT,
+            "can_edit_draft": is_owner and doc.status == Document.Status.DRAFT,
         },
     )
 
@@ -353,6 +376,104 @@ def doc_create(request):
         form = DocumentForm()
 
     return render(request, "approvals/doc_create.html", {"form": form})
+
+
+@login_required
+def doc_redraft(request, doc_id: int):
+    doc = get_object_or_404(Document, id=doc_id)
+    is_owner = doc.created_by_id == request.user.id or request.user.is_superuser
+    if not is_owner:
+        raise Http404
+
+    if doc.status != Document.Status.DRAFT:
+        messages.error(request, "임시 저장 문서만 수정/재기안할 수 있습니다.")
+        return redirect("approvals:doc_detail", doc_id=doc.id)
+
+    approver_ids = _line_user_ids_by_role(doc, DocumentLine.Role.APPROVE)
+    initial = {
+        "title": doc.title,
+        "content": doc.content,
+        "consultants": _line_user_ids_by_role(doc, DocumentLine.Role.CONSULT),
+        "approvers": approver_ids,
+        "receivers": _line_user_ids_by_role(doc, DocumentLine.Role.RECEIVE),
+        "approvers_order": ",".join(str(i) for i in approver_ids),
+    }
+
+    if request.method == "POST":
+        form = DocumentForm(request.POST, request.FILES)
+        if form.is_valid():
+            consultants = form.cleaned_data.get("consultants") or []
+            receivers = form.cleaned_data.get("receivers") or []
+
+            try:
+                update_draft_document(
+                    doc=doc,
+                    actor=request.user,
+                    title=form.cleaned_data["title"],
+                    content=form.cleaned_data["content"],
+                    consultants=consultants,
+                    approvers=list(form.cleaned_data["approvers"]),
+                    receivers=receivers,
+                    files=form.cleaned_data["files"],
+                )
+            except PermissionError:
+                messages.error(request, "문서 수정 권한이 없습니다.")
+                return redirect("approvals:doc_detail", doc_id=doc.id)
+            except ValueError:
+                messages.error(request, "임시 저장 문서만 수정할 수 있습니다.")
+                return redirect("approvals:doc_detail", doc_id=doc.id)
+
+            action = (
+                request.POST.get("action")
+                or request.POST.get("requested_action")
+                or request.GET.get("requested_action")
+                or "save"
+            ).strip().lower()
+            if action == "redraft":
+                try:
+                    redraft_document(doc=doc, actor=request.user, request=request)
+                    messages.success(request, "문서를 수정 후 재기안(재상신)했습니다.")
+                except PermissionError:
+                    messages.error(request, "문서 재기안 권한이 없습니다.")
+                except ValueError:
+                    messages.error(request, "임시 저장 문서만 재기안할 수 있습니다.")
+            else:
+                messages.success(request, "임시 저장 문서를 수정했습니다.")
+
+            return redirect("approvals:doc_detail", doc_id=doc.id)
+    else:
+        form = DocumentForm(initial=initial)
+
+    return render(
+        request,
+        "approvals/doc_redraft.html",
+        {
+            "form": form,
+            "doc": doc,
+            "approvers_order_initial": initial["approvers_order"],
+            "existing_attachments": list(doc.attachments.all()),
+        },
+    )
+
+
+@login_required
+def delete_redraft_attachment(request, doc_id: int, attachment_id: int):
+    doc = get_object_or_404(Document, id=doc_id)
+    if request.method != "POST":
+        return redirect("approvals:doc_redraft", doc_id=doc.id)
+
+    try:
+        deleted = delete_draft_attachment(doc=doc, actor=request.user, attachment_id=attachment_id)
+        if deleted:
+            messages.success(request, "첨부파일을 삭제했습니다.")
+        else:
+            messages.error(request, "삭제할 첨부파일을 찾지 못했습니다.")
+    except PermissionError:
+        messages.error(request, "문서 수정 권한이 없습니다.")
+    except ValueError:
+        messages.error(request, "임시 저장 문서에서만 첨부 삭제가 가능합니다.")
+
+    return redirect("approvals:doc_redraft", doc_id=doc.id)
 
 
 @login_required
@@ -398,6 +519,40 @@ def act_reject(request, doc_id: int):
         messages.success(request, "반려 처리했습니다.")
     except PermissionError:
         messages.error(request, "권한이 없습니다.")
+
+    return redirect("approvals:doc_detail", doc_id=doc.id)
+
+
+@login_required
+def act_withdraw(request, doc_id: int):
+    doc = get_object_or_404(Document, id=doc_id)
+    if request.method != "POST":
+        return redirect("approvals:doc_detail", doc_id=doc.id)
+
+    try:
+        withdraw_document(doc=doc, actor=request.user)
+        messages.success(request, "문서를 회수하여 임시 저장 상태로 전환했습니다.")
+    except PermissionError:
+        messages.error(request, "문서 회수 권한이 없습니다.")
+    except ValueError:
+        messages.error(request, "현재 상태에서는 문서를 회수할 수 없습니다.")
+
+    return redirect("approvals:doc_detail", doc_id=doc.id)
+
+
+@login_required
+def act_redraft(request, doc_id: int):
+    doc = get_object_or_404(Document, id=doc_id)
+    if request.method != "POST":
+        return redirect("approvals:doc_detail", doc_id=doc.id)
+
+    try:
+        redraft_document(doc=doc, actor=request.user, request=request)
+        messages.success(request, "문서를 재기안(재상신)했습니다.")
+    except PermissionError:
+        messages.error(request, "문서 재기안 권한이 없습니다.")
+    except ValueError:
+        messages.error(request, "임시 저장 문서만 재기안할 수 있습니다.")
 
     return redirect("approvals:doc_detail", doc_id=doc.id)
 

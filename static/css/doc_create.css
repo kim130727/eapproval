@@ -151,7 +151,8 @@
 /* ===== 협의자 / 결재자 / 수신자 박스 가로폭 고정 ===== */
 #consultantsBox,
 #approversBox,
-#receiversBox {
+#receiversBox,
+#existingAttachmentsBox {
   width: 100%;
   max-width: 420px;
 }
@@ -171,7 +172,8 @@
 
   #consultantsBox,
   #approversBox,
-  #receiversBox {
+  #receiversBox,
+  #existingAttachmentsBox {
     max-width: none;
     width: 100%;
   }
@@ -179,4 +181,44 @@
   .doc-create-card {
     max-width: 100%;
   }
+}
+
+#existingAttachmentsBox ul {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+#existingAttachmentsBox .attachment-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.attachment-link {
+  flex: 1;
+  min-width: 0;
+  word-break: break-all;
+  color: #1d4ed8;
+  text-decoration: underline;
+}
+
+.attachment-link:hover {
+  color: #1e40af;
+}
+
+.attachment-delete-btn {
+  flex: 0 0 auto;
+  border: 1px solid #dc2626;
+  background: #fff5f5;
+  color: #dc2626;
+  font-weight: 700;
+}
+
+.attachment-delete-btn:hover {
+  background: #fee2e2;
 }

@@ -30,6 +30,12 @@ urlpatterns = [
 
     # 신규 상신
     path("approvals/new/", views.doc_create, name="doc_create"),
+    path("approvals/<int:doc_id>/redraft/edit/", views.doc_redraft, name="doc_redraft"),
+    path(
+        "approvals/<int:doc_id>/redraft/attachments/<int:attachment_id>/delete/",
+        views.delete_redraft_attachment,
+        name="delete_redraft_attachment",
+    ),
 
     # 상세
     path("approvals/<int:doc_id>/", views.doc_detail, name="doc_detail"),
@@ -43,6 +49,8 @@ urlpatterns = [
     # 결재 액션
     path("approvals/<int:doc_id>/approve/", views.act_approve, name="act_approve"),
     path("approvals/<int:doc_id>/reject/", views.act_reject, name="act_reject"),
+    path("approvals/<int:doc_id>/withdraw/", views.act_withdraw, name="act_withdraw"),
+    path("approvals/<int:doc_id>/redraft/", views.act_redraft, name="act_redraft"),
 
     # 관리자(의장/위원장 등)
     path("approvals/admin/chair/", views.admin_chair, name="admin_chair"),

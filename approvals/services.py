@@ -252,3 +252,138 @@ def mark_read(*, doc: Document, actor) -> Document:
         line.save(update_fields=["decision", "acted_at"])
 
     return doc
+
+
+def _replace_lines(*, doc: Document, consultants, approvers, receivers) -> None:
+    doc.lines.all().delete()
+
+    order = 1
+    for u in consultants:
+        DocumentLine.objects.create(
+            document=doc,
+            role=DocumentLine.Role.CONSULT,
+            order=order,
+            user=u,
+        )
+        order += 1
+
+    for u in approvers:
+        DocumentLine.objects.create(
+            document=doc,
+            role=DocumentLine.Role.APPROVE,
+            order=order,
+            user=u,
+        )
+        order += 1
+
+    for u in receivers:
+        DocumentLine.objects.create(
+            document=doc,
+            role=DocumentLine.Role.RECEIVE,
+            order=order,
+            user=u,
+        )
+        order += 1
+
+
+@transaction.atomic
+def update_draft_document(
+    *,
+    doc: Document,
+    actor,
+    title: str,
+    content: str,
+    consultants,
+    approvers,
+    receivers,
+    files,
+) -> Document:
+    if doc.created_by_id != actor.id and not actor.is_superuser:
+        raise PermissionError("문서 수정 권한이 없습니다.")
+
+    if doc.status != Document.Status.DRAFT:
+        raise ValueError("임시 저장 문서만 수정할 수 있습니다.")
+
+    doc.title = title
+    doc.content = content
+    doc.current_line_order = 1
+    doc.save(update_fields=["title", "content", "current_line_order"])
+
+    _replace_lines(
+        doc=doc,
+        consultants=consultants,
+        approvers=approvers,
+        receivers=receivers,
+    )
+
+    for f in files:
+        Attachment.objects.create(document=doc, file=f, uploaded_by=actor)
+
+    return doc
+
+
+@transaction.atomic
+def delete_draft_attachment(*, doc: Document, actor, attachment_id: int) -> bool:
+    if doc.created_by_id != actor.id and not actor.is_superuser:
+        raise PermissionError("문서 수정 권한이 없습니다.")
+
+    if doc.status != Document.Status.DRAFT:
+        raise ValueError("임시 저장 문서에서만 첨부 삭제가 가능합니다.")
+
+    att = doc.attachments.filter(id=attachment_id).first()
+    if not att:
+        return False
+
+    att.file.delete(save=False)
+    att.delete()
+    return True
+
+
+@transaction.atomic
+def withdraw_document(*, doc: Document, actor) -> Document:
+    if doc.created_by_id != actor.id and not actor.is_superuser:
+        raise PermissionError("문서 회수 권한이 없습니다.")
+
+    if doc.status not in {
+        Document.Status.SUBMITTED,
+        Document.Status.IN_PROGRESS,
+        Document.Status.REJECTED,
+    }:
+        raise ValueError("현재 상태에서는 회수할 수 없습니다.")
+
+    doc.lines.update(
+        decision=DocumentLine.Decision.PENDING,
+        comment="",
+        acted_at=None,
+    )
+    doc.status = Document.Status.DRAFT
+    doc.current_line_order = 1
+    doc.save(update_fields=["status", "current_line_order"])
+    return doc
+
+
+@transaction.atomic
+def redraft_document(*, doc: Document, actor, request=None) -> Document:
+    if doc.created_by_id != actor.id and not actor.is_superuser:
+        raise PermissionError("문서 재기안 권한이 없습니다.")
+
+    if doc.status != Document.Status.DRAFT:
+        raise ValueError("임시 저장 문서만 재기안할 수 있습니다.")
+
+    doc.lines.update(
+        decision=DocumentLine.Decision.PENDING,
+        comment="",
+        acted_at=None,
+    )
+    doc.status = Document.Status.SUBMITTED
+    doc.current_line_order = 1
+    doc.save(update_fields=["status", "current_line_order"])
+
+    if _has_active_lines(doc):
+        _recalculate_doc_status_and_order(doc)
+    else:
+        doc.status = Document.Status.COMPLETED
+        doc.save(update_fields=["status"])
+
+    notify_on_submit(request=request, doc=doc, user=actor)
+    return doc
