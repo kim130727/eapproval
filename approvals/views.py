@@ -284,7 +284,9 @@ def export_docs_csv(request, kind: str):
 
     buf = io.StringIO()
     w = csv.writer(buf)
-    w.writerow(["id", "status", "title", "created_by", "current_line_order", "created_at", "updated_at"])
+    w.writerow(
+        ["id", "status", "title", "content", "created_by", "current_line_order", "created_at", "updated_at"]
+    )
 
     for d in qs:
         created_at = getattr(d, "created_at", None)
@@ -294,6 +296,7 @@ def export_docs_csv(request, kind: str):
                 d.id,
                 d.get_status_display() if hasattr(d, "get_status_display") else getattr(d, "status", ""),
                 getattr(d, "title", ""),
+                getattr(d, "content", ""),
                 _display_name(getattr(d, "created_by", None)),
                 getattr(d, "current_line_order", ""),
                 timezone.localtime(created_at).strftime("%Y-%m-%d %H:%M") if created_at else "",

@@ -12,6 +12,7 @@ from typing import Optional
 
 from django.contrib import admin, messages
 from django.http import FileResponse, HttpRequest, HttpResponse
+from django.template.defaultfilters import truncatechars
 from django.utils import timezone
 from django.utils.html import format_html
 
@@ -135,6 +136,7 @@ class DocumentAdmin(admin.ModelAdmin):
     list_display = (
         "id",
         "title",
+        "content_preview",
         "status",
         "created_by_display",
         "created_at",
@@ -147,7 +149,7 @@ class DocumentAdmin(admin.ModelAdmin):
     )
     search_fields = (
         "title",
-        # "content",          # 문서 본문 필드가 있으면 활성화
+        "content",
         # "created_by__username",
         # "created_by__first_name",
         # "created_by__last_name",
@@ -161,6 +163,10 @@ class DocumentAdmin(admin.ModelAdmin):
     def created_by_display(self, obj: Document) -> str:
         return display_name(getattr(obj, "created_by", None))
 
+    @admin.display(description="Content")
+    def content_preview(self, obj: Document) -> str:
+        return truncatechars(getattr(obj, "content", "") or "", 80)
+
     @admin.action(description="선택 문서 CSV 다운로드")
     def export_documents_csv(self, request: HttpRequest, queryset):
         if not queryset.exists():
@@ -173,13 +179,14 @@ class DocumentAdmin(admin.ModelAdmin):
         writer = csv.writer(buffer)
 
         # ✅ 필요 컬럼 추가/삭제 가능
-        writer.writerow(["id", "title", "status", "created_by", "created_at", "updated_at"])
+        writer.writerow(["id", "title", "content", "status", "created_by", "created_at", "updated_at"])
 
         for doc in qs:
             writer.writerow(
                 [
                     doc.id,
                     getattr(doc, "title", ""),
+                    getattr(doc, "content", ""),
                     getattr(doc, "status", ""),
                     display_name(getattr(doc, "created_by", None)),
                     local_dt(getattr(doc, "created_at", None)),
