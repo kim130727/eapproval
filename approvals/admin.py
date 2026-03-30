@@ -1,4 +1,3 @@
-# approvals/admin.py
 from __future__ import annotations
 
 import csv
@@ -8,7 +7,6 @@ import re
 import tempfile
 import zipfile
 from pathlib import Path
-from typing import Optional
 
 from django.contrib import admin, messages
 from django.http import FileResponse, HttpRequest, HttpResponse
@@ -16,23 +14,19 @@ from django.template.defaultfilters import truncatechars
 from django.utils import timezone
 from django.utils.html import format_html
 
-# ✅ 프로젝트의 실제 모델 경로에 맞게 import 수정하세요
 from .models import Attachment, Document, DocumentLine
 
 
 # -----------------------------
 # Shared helpers
 # -----------------------------
-_ILLEGAL_FS_CHARS = r'\/:*?"<>|'
+_ILLEGAL_FS_CHARS = r'\\/:*?"<>|'
 _ILLEGAL_FS_RE = re.compile(f"[{re.escape(_ILLEGAL_FS_CHARS)}]")
 
 
 def safe_component(value: object, default: str = "untitled") -> str:
     """
     Make a string safe to be used in filenames / zip arcnames.
-    - remove forbidden characters on Windows
-    - strip newlines
-    - prevent empty
     """
     s = str(value or "").strip()
     s = s.replace("\n", " ").replace("\r", " ").replace("\t", " ")
@@ -67,36 +61,35 @@ def unique_arcname(used: set[str], arcname: str) -> str:
 
 def display_name(user) -> str:
     """
-    Robust display name:
     profile.display_name() -> profile.full_name -> user.get_full_name() -> user.username -> "-"
     """
     if not user:
         return "-"
+
     profile = getattr(user, "profile", None)
     if profile:
-        # method
-        m = getattr(profile, "display_name", None)
-        if callable(m):
+        method = getattr(profile, "display_name", None)
+        if callable(method):
             try:
-                v = m()
-                if v:
-                    return str(v)
+                value = method()
+                if value:
+                    return str(value)
             except Exception:
                 pass
-        # field
-        v = getattr(profile, "full_name", None)
-        if v:
-            return str(v)
+
+        value = getattr(profile, "full_name", None)
+        if value:
+            return str(value)
 
     try:
-        v = user.get_full_name()
-        if v:
-            return str(v)
+        value = user.get_full_name()
+        if value:
+            return str(value)
     except Exception:
         pass
 
-    v = getattr(user, "username", None)
-    return str(v) if v else "-"
+    value = getattr(user, "username", None)
+    return str(value) if value else "-"
 
 
 def local_dt(dt) -> str:
@@ -105,7 +98,6 @@ def local_dt(dt) -> str:
     try:
         return timezone.localtime(dt).strftime("%Y-%m-%d %H:%M:%S")
     except Exception:
-        # 마지막 안전장치
         return str(dt)
 
 
@@ -123,16 +115,8 @@ def _zip_response_from_spooled_file(
 # -----------------------------
 @admin.register(Document)
 class DocumentAdmin(admin.ModelAdmin):
-    """
-    운영용 세팅:
-    - list_display / list_filter / search_fields / ordering 복구
-    - CSV/ZIP action 안정화
-    - ZIP은 SpooledTemporaryFile로 스풀링(메모리→디스크)
-    """
-
     actions = ["export_documents_csv", "download_documents_attachments_zip"]
 
-    # ✅ 프로젝트 실제 필드에 맞춰 조정하세요
     list_display = (
         "id",
         "title",
@@ -142,22 +126,9 @@ class DocumentAdmin(admin.ModelAdmin):
         "created_at",
         "updated_at",
     )
-    list_filter = (
-        "status",
-        "created_at",
-        "updated_at",
-    )
-    search_fields = (
-        "title",
-        "content",
-        # "created_by__username",
-        # "created_by__first_name",
-        # "created_by__last_name",
-    )
+    list_filter = ("status", "created_at", "updated_at")
+    search_fields = ("title", "content")
     ordering = ("-id",)
-
-    # autocomplete_fields = ("created_by",)  # 필요 시
-    # date_hierarchy = "created_at"          # 필요 시
 
     @admin.display(description="작성자")
     def created_by_display(self, obj: Document) -> str:
@@ -177,8 +148,6 @@ class DocumentAdmin(admin.ModelAdmin):
 
         buffer = io.StringIO()
         writer = csv.writer(buffer)
-
-        # ✅ 필요 컬럼 추가/삭제 가능
         writer.writerow(["id", "title", "content", "status", "created_by", "created_at", "updated_at"])
 
         for doc in qs:
@@ -194,7 +163,7 @@ class DocumentAdmin(admin.ModelAdmin):
                 ]
             )
 
-        csv_bytes = buffer.getvalue().encode("utf-8-sig")  # 엑셀 한글 호환
+        csv_bytes = buffer.getvalue().encode("utf-8-sig")
         filename = f"documents_{timezone.now().strftime('%Y%m%d_%H%M%S')}.csv"
         resp = HttpResponse(csv_bytes, content_type="text/csv; charset=utf-8")
         resp["Content-Disposition"] = f'attachment; filename="{filename}"'
@@ -206,17 +175,12 @@ class DocumentAdmin(admin.ModelAdmin):
             self.message_user(request, "선택된 문서가 없습니다.", level=messages.WARNING)
             return None
 
-        # 첨부가 많은 경우를 대비해 prefetch
         qs = queryset.prefetch_related("attachments")
 
-        # ✅ threshold를 넘기면 자동으로 디스크에 스풀링
-        #    (예: 50MB) - 서버 환경에 맞게 조정 가능
         spooled = tempfile.SpooledTemporaryFile(max_size=50 * 1024 * 1024, mode="w+b")
-
         used_names: set[str] = set()
         wrote_any = False
 
-        # ZIP_DEFLATED 사용(압축). CPU가 걱정이면 ZIP_STORED로 변경 가능
         with zipfile.ZipFile(spooled, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
             for doc in qs:
                 folder = safe_component(f"doc_{doc.id}_{getattr(doc, 'title', '')}")
@@ -228,14 +192,10 @@ class DocumentAdmin(admin.ModelAdmin):
                         continue
 
                     try:
-                        # 파일명
                         original_name = os.path.basename(getattr(f, "name", "") or "")
                         safe_name = safe_component(original_name or f"attachment_{att.id}")
+                        arcname = unique_arcname(used_names, f"{folder}/{safe_name}")
 
-                        arcname = f"{folder}/{safe_name}"
-                        arcname = unique_arcname(used_names, arcname)
-
-                        # read once, write once (spooled file handles large zip better)
                         f.open("rb")
                         try:
                             data = f.read()
@@ -248,7 +208,6 @@ class DocumentAdmin(admin.ModelAdmin):
                         zf.writestr(arcname, data)
                         wrote_any = True
                     except Exception:
-                        # 하나 실패해도 전체 ZIP은 최대한 생성
                         continue
 
         if not wrote_any:
@@ -272,15 +231,9 @@ class DocumentAdmin(admin.ModelAdmin):
 # -----------------------------
 @admin.register(DocumentLine)
 class DocumentLineAdmin(admin.ModelAdmin):
-    # DocumentLine fields: document, role, order, user, decision, comment, acted_at  :contentReference[oaicite:1]{index=1}
     list_display = ("id", "document", "order", "role", "user_display", "decision", "acted_at")
     list_filter = ("role", "decision", "acted_at")
-    search_fields = (
-        "document__title",
-        "user__username",
-        "user__first_name",
-        "user__last_name",
-    )
+    search_fields = ("document__title", "user__username", "user__first_name", "user__last_name")
     ordering = ("document_id", "order", "id")
 
     @admin.display(description="대상")
@@ -293,9 +246,8 @@ class DocumentLineAdmin(admin.ModelAdmin):
 # -----------------------------
 @admin.register(Attachment)
 class AttachmentAdmin(admin.ModelAdmin):
-    actions = ["download_attachments_zip"]
+    actions = ["export_attachments_csv", "download_attachments_zip"]
 
-    # ✅ 실제 필드에 맞게 조정
     list_display = ("id", "document", "file_link", "uploader_display", "created_at")
     list_filter = ("created_at",)
     search_fields = ("document__title", "file")
@@ -313,8 +265,54 @@ class AttachmentAdmin(admin.ModelAdmin):
             return "-"
         url = getattr(f, "url", "")
         name = os.path.basename(getattr(f, "name", "") or "") or "download"
-        # ✅ 정상 링크로 수정
         return format_html('<a href="{}" target="_blank" rel="noopener noreferrer">{}</a>', url, name)
+
+    @admin.action(description="선택 첨부파일 CSV 다운로드")
+    def export_attachments_csv(self, request: HttpRequest, queryset):
+        if not queryset.exists():
+            self.message_user(request, "선택된 첨부파일이 없습니다.", level=messages.WARNING)
+            return None
+
+        qs = queryset.select_related("document", "uploaded_by")
+
+        buffer = io.StringIO()
+        writer = csv.writer(buffer)
+        writer.writerow(
+            [
+                "id",
+                "document_id",
+                "document_title",
+                "file_name",
+                "file_path",
+                "uploader",
+                "created_at",
+            ]
+        )
+
+        for att in qs:
+            doc = getattr(att, "document", None)
+            f = getattr(att, "file", None)
+            file_path = getattr(f, "name", "") if f else ""
+            file_name = os.path.basename(file_path) if file_path else ""
+            user = getattr(att, "uploaded_by", None) or getattr(att, "uploader", None)
+
+            writer.writerow(
+                [
+                    att.id,
+                    getattr(doc, "id", ""),
+                    getattr(doc, "title", "") if doc else "",
+                    file_name,
+                    file_path,
+                    display_name(user),
+                    local_dt(getattr(att, "created_at", None)),
+                ]
+            )
+
+        csv_bytes = buffer.getvalue().encode("utf-8-sig")
+        filename = f"attachments_{timezone.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        resp = HttpResponse(csv_bytes, content_type="text/csv; charset=utf-8")
+        resp["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return resp
 
     @admin.action(description="선택 첨부파일 ZIP 다운로드")
     def download_attachments_zip(self, request: HttpRequest, queryset):
