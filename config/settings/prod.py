@@ -1,3 +1,4 @@
+# config/prod.py
 from .base import *
 
 ALLOWED_HOSTS = [
