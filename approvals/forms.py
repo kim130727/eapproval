@@ -10,8 +10,8 @@ from .permissions import CHAIR_GROUP  # 프로젝트 표준: "CHAIR"
 
 User = get_user_model()
 
-# 파일 1개당 2MB 제한
-MAX_FILE_SIZE = 2 * 1024 * 1024  # 2MB
+# 파일 1개당 5MB 제한
+MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
 
 
 def user_label(u) -> str:
@@ -68,7 +68,7 @@ class MultipleFileField(forms.FileField):
 
             if getattr(f, "size", 0) > MAX_FILE_SIZE:
                 size_mb = round(f.size / 1024 / 1024, 2)
-                raise ValidationError(f"[{f.name}] 파일이 2MB를 초과했습니다. (현재: {size_mb}MB)")
+                raise ValidationError(f"[{f.name}] 파일이 5MB를 초과했습니다. (현재: {size_mb}MB)")
 
             cleaned_files.append(f)
 
